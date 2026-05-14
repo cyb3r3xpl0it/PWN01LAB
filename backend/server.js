@@ -11,6 +11,19 @@ const jwt        = require('jsonwebtoken');
 const ejs        = require('ejs');
 const xml2js     = require('xml2js');
 const multer     = require('multer');
+const crypto     = require('crypto');
+const AdmZip     = require('adm-zip');
+
+// RSA key pair para VULN 32 (JWT RS256→HS256)
+const { privateKey: rsaPrivate, publicKey: rsaPublic } = crypto.generateKeyPairSync('rsa', { modulusLength: 2048 });
+const rsaPublicPem = rsaPublic.export({ type: 'spki', format: 'pem' });
+
+// Stores en memoria para challenges
+const sessions    = {};   // Session Fixation
+const twofa_codes = {};   // 2FA Brute Force
+const oauth_codes = {};   // OAuth state
+const prng_tokens = {};   // Weak PRNG
+const webhooks    = {};   // Stored SSRF
 
 const app = express();
 app.use(cors());
@@ -538,6 +551,382 @@ app.post('/api/reset-poison', (req, res) => {
         : 'Cambia el header Host o añade X-Forwarded-Host: evil.com para envenenar el link',
     });
   });
+});
+
+// ─────────────────────────────────────────────
+// VULN 29: Second-order SQLi
+// ─────────────────────────────────────────────
+app.post('/api/update-username', (req, res) => {
+  const { user_id, username } = req.body;
+  // Fase 1: almacena de forma segura (prepared statement)
+  db.query('UPDATE users SET username = ? WHERE id = ?', [username, user_id], (err) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json({ success: true, stored: username, note: 'Almacenado con prepared statement — seguro en esta fase' });
+  });
+});
+
+app.get('/api/greet', (req, res) => {
+  const user_id = req.query.id;
+  db.query('SELECT username FROM users WHERE id = ?', [user_id], (err, results) => {
+    if (err || !results.length) return res.status(404).json({ error: 'Usuario no encontrado' });
+    const username = results[0].username;
+    // Fase 2: VULNERABLE — usa el valor almacenado sin sanitizar en nueva query
+    const query = `SELECT id, username, email, role, secret FROM users WHERE username = '${username}'`;
+    db.query(query, (err2, results2) => {
+      if (err2) return res.json({ error: err2.sqlMessage, query, flag: 'FLAG{second_order_sqli}' });
+      res.json({ greeting: `Hola, ${username}!`, query, results: results2, flag: results2.length > 1 || username.includes("'") ? 'FLAG{second_order_sqli}' : undefined });
+    });
+  });
+});
+
+// ─────────────────────────────────────────────
+// VULN 30: Blind SQLi — solo devuelve true/false
+// ─────────────────────────────────────────────
+app.get('/api/user-exists', (req, res) => {
+  const username = req.query.username || '';
+  // VULNERABLE: concatenación — permite extraer datos caracter por caracter
+  const query = `SELECT COUNT(*) as cnt FROM users WHERE username = '${username}'`;
+  db.query(query, (err, results) => {
+    if (err) return res.json({ exists: false, error: err.sqlMessage, flag: 'FLAG{blind_sqli}' });
+    const exists = results[0].cnt > 0;
+    res.json({ exists, flag: username.includes("'") ? 'FLAG{blind_sqli}' : undefined });
+  });
+});
+
+// ─────────────────────────────────────────────
+// VULN 31: Session Fixation
+// ─────────────────────────────────────────────
+app.post('/api/session/login', (req, res) => {
+  const { username, password, sid } = req.body;
+  db.query('SELECT * FROM users WHERE username = ? AND password = ?', [username, password], (err, results) => {
+    if (err || !results.length) return res.status(401).json({ error: 'Credenciales incorrectas' });
+    const user = results[0];
+    // VULNERABLE: acepta session ID propuesto por el cliente
+    const sessionId = sid || crypto.randomBytes(16).toString('hex');
+    sessions[sessionId] = { userId: user.id, username: user.username, role: user.role };
+    res.json({ success: true, session_id: sessionId, user: user.username, note: sid ? 'Usó SID del cliente — fijación de sesión posible' : 'SID generado aleatoriamente' });
+  });
+});
+
+app.get('/api/session/profile', (req, res) => {
+  const sid = req.headers['x-session-id'] || req.query.sid;
+  const session = sessions[sid];
+  if (!session) return res.status(401).json({ error: 'Sesión no encontrada. Header: X-Session-ID: <sid>' });
+  res.json({ session, flag: 'FLAG{session_fixation_hijack}' });
+});
+
+// ─────────────────────────────────────────────
+// VULN 32: JWT Algorithm Confusion (RS256 → HS256)
+// ─────────────────────────────────────────────
+app.get('/api/rs256/pubkey', (req, res) => {
+  res.json({ publicKey: rsaPublicPem, hint: 'Usa esta clave pública como secreto HMAC para forjar un token HS256' });
+});
+
+app.post('/api/rs256/token', (req, res) => {
+  const { username, password } = req.body;
+  db.query('SELECT * FROM users WHERE username = ? AND password = ?', [username, password], (err, results) => {
+    if (err || !results.length) return res.status(401).json({ error: 'Credenciales incorrectas' });
+    const user = results[0];
+    const token = jwt.sign({ id: user.id, username: user.username, role: user.role }, rsaPrivate, { algorithm: 'RS256', expiresIn: '1h' });
+    res.json({ token, algorithm: 'RS256', publicKey: rsaPublicPem });
+  });
+});
+
+app.post('/api/rs256/forge', (req, res) => {
+  // Endpoint helper: firma con la clave pública como secreto HMAC (simula el ataque del cliente)
+  const payload = req.body;
+  // VULNERABLE: el servidor mismo puede usarse para crear el token forjado
+  const forged = jwt.sign(payload, rsaPublicPem, { algorithm: 'HS256' });
+  res.json({ forged_token: forged, note: 'Firmado con la clave pública como secreto HMAC — algoritmo HS256' });
+});
+
+app.get('/api/rs256/flag', (req, res) => {
+  const token = (req.headers.authorization || '').split(' ')[1];
+  if (!token) return res.status(401).json({ error: 'Authorization: Bearer <token>' });
+  try {
+    // VULNERABLE: acepta tanto RS256 como HS256 — permite confusion attack
+    const decoded = jwt.verify(token, rsaPublicPem, { algorithms: ['RS256', 'HS256'] });
+    if (decoded.role !== 'admin') return res.status(403).json({ error: `Rol '${decoded.role}' insuficiente. Necesitas role:admin` });
+    res.json({ success: true, flag: 'FLAG{jwt_algorithm_confusion}', decoded });
+  } catch (e) {
+    res.status(401).json({ error: e.message });
+  }
+});
+
+// ─────────────────────────────────────────────
+// VULN 33: 2FA Brute Force — sin rate limiting
+// ─────────────────────────────────────────────
+app.post('/api/2fa/setup', (req, res) => {
+  const { user_id } = req.body;
+  // PIN de 4 dígitos (0000-9999)
+  const pin = String(Math.floor(Math.random() * 10000)).padStart(4, '0');
+  twofa_codes[user_id || '1'] = { pin, attempts: 0 };
+  res.json({ user_id: user_id || '1', note: 'PIN de 4 dígitos generado (0000-9999). Sin límite de intentos.' });
+});
+
+app.post('/api/2fa/verify', (req, res) => {
+  const { user_id, code } = req.body;
+  const data = twofa_codes[user_id || '1'];
+  if (!data) return res.status(400).json({ error: 'Haz setup primero' });
+  // VULNERABLE: sin rate limiting, sin lockout, sin bloqueo
+  data.attempts++;
+  if (code === data.pin) {
+    res.json({ success: true, flag: 'FLAG{2fa_brute_force}', pin: data.pin, attempts: data.attempts });
+  } else {
+    res.json({ success: false, message: 'PIN incorrecto', attempts_so_far: data.attempts });
+  }
+});
+
+// ─────────────────────────────────────────────
+// VULN 34: OAuth — parámetro state ausente
+// ─────────────────────────────────────────────
+app.get('/api/oauth/authorize', (req, res) => {
+  const { redirect_uri, state } = req.query;
+  const code = crypto.randomBytes(8).toString('hex');
+  oauth_codes[code] = { redirect_uri, state: state || null, used: false };
+  res.json({ code, state_echoed: state || null, redirect_uri, note: state ? 'State presente — CSRF protegido' : 'VULNERABLE: sin state → CSRF en OAuth posible' });
+});
+
+app.get('/api/oauth/callback', (req, res) => {
+  const { code, state } = req.query;
+  const authData = oauth_codes[code];
+  if (!authData || authData.used) return res.status(400).json({ error: 'Código inválido o ya usado' });
+  authData.used = true;
+  // VULNERABLE: no verifica que el state del callback coincide con el del authorize
+  const poisoned = !authData.state;
+  res.json({
+    success: true,
+    access_token: 'oauth_' + crypto.randomBytes(8).toString('hex'),
+    state_verified: !!authData.state,
+    flag: poisoned ? 'FLAG{oauth_state_missing}' : undefined,
+    note: poisoned ? 'OAuth completado sin state — un atacante pudo haber iniciado este flujo (CSRF)' : 'State verificado correctamente',
+  });
+});
+
+// ─────────────────────────────────────────────
+// VULN 35: Insecure Math.random() — PRNG débil
+// ─────────────────────────────────────────────
+app.post('/api/prng/token', (req, res) => {
+  const { user_id } = req.body;
+  // VULNERABLE: Math.random() no es criptográficamente seguro
+  const token = Math.random().toString(36).substring(2, 10);
+  prng_tokens[user_id || '1'] = token;
+  res.json({ token, entropy_bits: Math.log2(36 ** 8).toFixed(1), note: 'Generado con Math.random() — predecible y baja entropía vs crypto.randomBytes(32)' });
+});
+
+app.get('/api/prng/samples', (req, res) => {
+  // Genera 10 tokens consecutivos para mostrar el patrón
+  const samples = Array.from({ length: 10 }, () => Math.random().toString(36).substring(2, 10));
+  res.json({ samples, flag: 'FLAG{weak_prng_math_random}', note: 'V8 usa xorshift128+ — con suficientes muestras el estado interno es recuperable' });
+});
+
+// ─────────────────────────────────────────────
+// VULN 36: Timing Attack — comparación no constante
+// ─────────────────────────────────────────────
+const TIMING_SECRET = 'vulnlab2024';
+
+app.post('/api/timing/check', (req, res) => {
+  const { guess } = req.body || {};
+  const start = process.hrtime.bigint();
+  // VULNERABLE: early-exit revela cuántos chars coinciden por tiempo
+  let match = true;
+  for (let i = 0; i < TIMING_SECRET.length; i++) {
+    if (!guess || guess[i] !== TIMING_SECRET[i]) { match = false; break; }
+    // 1ms artificial por caracter correcto (exagerado para hacerlo visible)
+    const t = Date.now(); while (Date.now() - t < 1) {}
+  }
+  const elapsed = Number(process.hrtime.bigint() - start) / 1e6;
+  res.json({ match, elapsed_ms: elapsed.toFixed(2), hint: 'A más caracteres correctos, más tarda la respuesta', flag: match ? 'FLAG{timing_attack_secret_found}' : undefined });
+});
+
+// ─────────────────────────────────────────────
+// VULN 37: Email Header Injection
+// ─────────────────────────────────────────────
+app.post('/api/contact', (req, res) => {
+  const { name, email, message } = req.body;
+  if (!name || !email || !message) return res.status(400).json({ error: 'Campos requeridos: name, email, message' });
+  // VULNERABLE: email y name van directo a los headers sin sanitizar
+  const headers = `From: ${email}\r\nTo: admin@corp.com\r\nSubject: Contacto de ${name}`;
+  const injected = /[\r\n]/.test(email) || /[\r\n]/.test(name);
+  res.json({
+    sent: true,
+    headers_used: headers,
+    flag: injected ? 'FLAG{email_header_injection}' : undefined,
+    note: injected ? 'Headers inyectados — Bcc, From, etc. pueden añadirse' : 'Prueba con \\r\\n en el campo email para inyectar headers',
+  });
+});
+
+// ─────────────────────────────────────────────
+// VULN 38: HTTP Parameter Pollution
+// ─────────────────────────────────────────────
+app.get('/api/items', (req, res) => {
+  const id = req.query.id;
+  // Con ?id=1&id=admin , Express toma el último valor como array o el primero
+  if (Array.isArray(id)) {
+    // VULNERABLE: comportamiento impredecible — WAF ve el primero, app usa el último
+    const first = id[0];
+    const last = id[id.length - 1];
+    db.query('SELECT id, username, email, role FROM users WHERE id = ?', [last], (err, results) => {
+      if (err) return res.status(500).json({ error: err.message });
+      res.json({ received_ids: id, waf_sees: first, app_uses: last, result: results[0] || null, flag: 'FLAG{http_param_pollution}' });
+    });
+  } else {
+    db.query('SELECT id, username, email, role FROM users WHERE id = ?', [id], (err, results) => {
+      if (err) return res.status(500).json({ error: err.message });
+      res.json({ id, result: results[0] || null, note: 'Prueba con ?id=5&id=1 para ver la contaminación de parámetros' });
+    });
+  }
+});
+
+// ─────────────────────────────────────────────
+// VULN 39: Excessive Data Exposure
+// ─────────────────────────────────────────────
+app.get('/api/users/all', (req, res) => {
+  // VULNERABLE: devuelve todos los campos incluyendo password y secret
+  db.query('SELECT * FROM users', (err, results) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json({ flag: 'FLAG{excessive_data_exposure}', users: results, note: 'Incluye password, secret y campos internos que no deberían exponerse' });
+  });
+});
+
+// ─────────────────────────────────────────────
+// VULN 40: Debug endpoints expuestos
+// ─────────────────────────────────────────────
+app.get('/api/debug', (req, res) => {
+  // VULNERABLE: expone configuración interna y variables de entorno
+  res.json({
+    flag: 'FLAG{debug_endpoint_exposed}',
+    node_version: process.version,
+    platform: process.platform,
+    env: process.env,
+    uptime_s: process.uptime().toFixed(1),
+    memory: process.memoryUsage(),
+    cwd: process.cwd(),
+    pid: process.pid,
+    sessions_count: Object.keys(sessions).length,
+  });
+});
+
+// ─────────────────────────────────────────────
+// VULN 41: Stack traces en producción
+// ─────────────────────────────────────────────
+app.get('/api/crash', (req, res) => {
+  const input = req.query.input || '';
+  try {
+    // VULNERABLE: errores revelan stack trace, rutas del servidor y estructura interna
+    const obj = JSON.parse(input);
+    const val = obj.a.b.c; // lanza TypeError si la estructura no existe
+    res.json({ result: val });
+  } catch (e) {
+    res.status(500).json({
+      error: e.message,
+      stack: e.stack,          // VULNERABLE: expone rutas del servidor
+      input,
+      flag: 'FLAG{stack_trace_disclosure}',
+    });
+  }
+});
+
+// ─────────────────────────────────────────────
+// VULN 42: Hash sin sal — MD5 vulnerable a rainbow tables
+// ─────────────────────────────────────────────
+app.get('/api/hashes', (req, res) => {
+  // VULNERABLE: expone hashes MD5 sin sal — crackeables con rainbow tables
+  res.json({
+    flag: 'FLAG{weak_hash_no_salt}',
+    note: 'MD5 sin sal — usa https://crackstation.net para crackearlos',
+    hashes: [
+      { username: 'admin',  hash: crypto.createHash('md5').update('supersecret123').digest('hex'), algo: 'MD5' },
+      { username: 'jsmith', hash: crypto.createHash('md5').update('password123').digest('hex'),    algo: 'MD5' },
+      { username: 'victim', hash: crypto.createHash('md5').update('mypassword').digest('hex'),     algo: 'MD5' },
+    ],
+  });
+});
+
+// ─────────────────────────────────────────────
+// VULN 43: Cookie flags ausentes — robable via XSS
+// ─────────────────────────────────────────────
+app.post('/api/cookie-login', (req, res) => {
+  const { username, password } = req.body;
+  db.query('SELECT * FROM users WHERE username = ? AND password = ?', [username, password], (err, results) => {
+    if (err || !results.length) return res.status(401).json({ error: 'Credenciales incorrectas' });
+    const user = results[0];
+    // VULNERABLE: sin HttpOnly → robable con document.cookie (XSS)
+    // VULNERABLE: sin Secure → transmitida en HTTP plano
+    // VULNERABLE: sin SameSite → usable en requests CSRF
+    res.setHeader('Set-Cookie', `session_id=${user.id}:${user.username}:${user.role}; Path=/`);
+    res.json({ success: true, flag: 'FLAG{cookie_missing_flags}', user: user.username, note: 'Cookie sin HttpOnly, Secure ni SameSite' });
+  });
+});
+
+// ─────────────────────────────────────────────
+// VULN 44 & 45: DOM XSS y DOM Clobbering — frontend only (ver HTML)
+// ─────────────────────────────────────────────
+
+// ─────────────────────────────────────────────
+// VULN 46: Stored SSRF — URL guardada y fetchada después
+// ─────────────────────────────────────────────
+app.post('/api/webhook/save', (req, res) => {
+  const { id, url } = req.body;
+  if (!id || !url) return res.status(400).json({ error: 'id y url requeridos' });
+  // VULNERABLE: guarda la URL sin validar destino
+  webhooks[id] = url;
+  res.json({ saved: true, id, url, note: 'La URL se fetchará cuando se dispare el webhook — SSRF indirecto' });
+});
+
+app.post('/api/webhook/trigger', (req, res) => {
+  const { id } = req.body;
+  const url = webhooks[id];
+  if (!url) return res.status(404).json({ error: 'Webhook no encontrado' });
+  // VULNERABLE: fetcha URL almacenada — el origen del SSRF no es directo
+  const client = url.startsWith('https://') ? https : http;
+  try {
+    const reqOut = client.get(url, { timeout: 4000 }, (response) => {
+      let data = '';
+      response.on('data', chunk => { data += chunk; });
+      response.on('end', () => res.json({ triggered: true, url, status: response.statusCode, body: data.substring(0, 1000), flag: 'FLAG{stored_ssrf}' }));
+    });
+    reqOut.on('error', err => res.json({ triggered: true, url, error: err.message, flag: 'FLAG{stored_ssrf}' }));
+    reqOut.on('timeout', () => { reqOut.destroy(); res.json({ triggered: true, url, error: 'Timeout', flag: 'FLAG{stored_ssrf}' }); });
+  } catch (e) {
+    res.json({ triggered: false, error: e.message });
+  }
+});
+
+// ─────────────────────────────────────────────
+// VULN 47: Zip Slip — extracción sin validar paths
+// ─────────────────────────────────────────────
+app.get('/api/zipslip/malicious', (req, res) => {
+  // Genera un ZIP con una entrada de path traversal para el demo
+  const zip = new AdmZip();
+  zip.addFile('normal.txt', Buffer.from('Archivo normal de prueba'));
+  zip.addFile('../../tmp/zipslip_pwned.txt', Buffer.from('FLAG{zip_slip_traversal}\nArchivo escrito fuera del directorio destino'));
+  const buffer = zip.toBuffer();
+  res.setHeader('Content-Type', 'application/zip');
+  res.setHeader('Content-Disposition', 'attachment; filename=malicious.zip');
+  res.send(buffer);
+});
+
+app.post('/api/unzip', upload.single('zipfile'), (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'Sin archivo zip' });
+  const DEST = '/app/uploads/extracted/';
+  fs.mkdirSync(DEST, { recursive: true });
+  try {
+    const zip = new AdmZip(req.file.path);
+    const entries = [];
+    zip.getEntries().forEach(entry => {
+      const destPath = path.join(DEST, entry.entryName);
+      // VULNERABLE: no verifica que destPath esté dentro de DEST
+      fs.mkdirSync(path.dirname(destPath), { recursive: true });
+      fs.writeFileSync(destPath, entry.getData());
+      const slipped = !destPath.startsWith(DEST);
+      entries.push({ entry: entry.entryName, dest: destPath, slipped });
+    });
+    const hasSlip = entries.some(e => e.slipped);
+    res.json({ extracted: entries, flag: hasSlip ? 'FLAG{zip_slip_traversal}' : undefined, note: hasSlip ? 'Archivo escrito fuera del directorio destino' : 'Sin traversal detectado' });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
 // Health check

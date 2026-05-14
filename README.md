@@ -44,7 +44,7 @@ vulnlab/
 | backend   | 3000          | API Express.js             |
 | db        | 3306          | MySQL 8.0                  |
 
-## Retos incluidos (28 total)
+## Retos incluidos (48 total)
 
 | #  | Vulnerabilidad            | Severidad | Endpoint                          |
 |----|---------------------------|-----------|-----------------------------------|
@@ -76,6 +76,26 @@ vulnlab/
 | 26 | Verb Tampering            | MED       | GET|POST /api/admin/secret-action |
 | 27 | Log Injection             | MED       | POST /api/log                     |
 | 28 | Host Header Injection     | HIGH      | POST /api/reset-poison            |
+| 29 | Second-order SQLi         | CRIT      | POST /api/update-username · GET /api/greet |
+| 30 | Blind SQLi                | HIGH      | GET  /api/user-exists             |
+| 31 | Session Fixation          | HIGH      | POST /api/session/login · GET /api/session/profile |
+| 32 | JWT Algorithm Confusion   | HIGH      | POST /api/rs256/token · POST /api/rs256/forge · GET /api/rs256/flag |
+| 33 | 2FA Brute Force           | HIGH      | POST /api/2fa/setup · POST /api/2fa/verify |
+| 34 | OAuth State Bypass        | MED       | GET  /api/oauth/authorize · GET /api/oauth/callback |
+| 35 | Weak PRNG                 | HIGH      | POST /api/prng/token · GET /api/prng/samples |
+| 36 | Timing Attack             | MED       | POST /api/timing/check            |
+| 37 | Email Header Injection    | MED       | POST /api/contact                 |
+| 38 | HTTP Parameter Pollution  | MED       | GET  /api/items                   |
+| 39 | Excessive Data Exposure   | MED       | GET  /api/users/all               |
+| 40 | Debug Endpoint Expuesto   | MED       | GET  /api/debug                   |
+| 41 | Stack Trace Disclosure    | MED       | GET  /api/crash                   |
+| 42 | Hash sin sal (MD5)        | HIGH      | GET  /api/hashes                  |
+| 43 | Cookie Flags Ausentes     | MED       | POST /api/cookie-login            |
+| 44 | DOM-based XSS             | CRIT      | (frontend only — innerHTML + location.hash) |
+| 45 | DOM Clobbering            | MED       | (frontend only — window.config override) |
+| 46 | Stored SSRF               | HIGH      | POST /api/webhook/save · POST /api/webhook/trigger |
+| 47 | Zip Slip                  | HIGH      | GET  /api/zipslip/malicious · POST /api/unzip |
+| 48 | SRI Ausente               | MED       | (concepto frontend — scripts CDN sin integrity) |
 
 ## Apagar
 

