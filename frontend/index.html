@@ -80,7 +80,48 @@ textarea { resize: vertical; min-height: 70px; }
 
 /* ── IDOR grid ── */
 .split { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
-@media (max-width: 680px) { .split { grid-template-columns: 1fr; } aside { display: none; } }
+
+/* ── Responsive ── */
+.menu-btn { display: none; background: none; border: 1px solid #1e2a3a; color: #5DCAA5; padding: 5px 9px; border-radius: 4px; cursor: pointer; font-family: inherit; font-size: 16px; line-height: 1; transition: background 0.15s; }
+.menu-btn:hover { background: #5DCAA511; }
+.nav-backdrop { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.55); z-index: 99; }
+.nav-backdrop.show { display: block; }
+
+@media (max-width: 768px) {
+  .menu-btn { display: block; }
+  header { padding: 10px 14px; }
+  aside {
+    position: fixed;
+    top: 0; left: 0;
+    height: 100vh;
+    z-index: 100;
+    transform: translateX(-100%);
+    transition: transform 0.22s ease;
+    padding-top: 52px;
+    width: 220px;
+    min-width: 220px;
+  }
+  aside.open { transform: translateX(0); }
+  .content { padding: 14px 12px; }
+  .challenge-box { max-width: 100%; padding: 14px 12px; }
+  .tabs { flex-wrap: wrap; }
+  .row { flex-direction: column; }
+  .row input { width: 100%; }
+  .code-block { overflow-x: auto; }
+  .split { grid-template-columns: 1fr; }
+  .welcome { max-width: 100%; }
+  .welcome h1 { font-size: 18px; }
+}
+
+@media (max-width: 420px) {
+  header { padding: 8px 10px; }
+  .logo { font-size: 13px; }
+  .content { padding: 10px 8px; }
+  .challenge-box { padding: 12px 10px; }
+  .ch-title { font-size: 14px; }
+  .score-pill { font-size: 11px; padding: 3px 10px; }
+  .btn { padding: 8px 14px; }
+}
 
 /* ── Message board ── */
 .msg-card { background: #0d1425; border: 1px solid #1e2a3a; border-radius: 4px; padding: 10px 12px; margin-bottom: 8px; }
@@ -97,9 +138,13 @@ textarea { resize: vertical; min-height: 70px; }
 <body>
 <div class="shell">
   <header>
-    <div class="logo">⚡ WebVulnLab</div>
+    <div style="display:flex;align-items:center;gap:10px">
+      <button class="menu-btn" id="menuBtn" onclick="toggleNav()">☰</button>
+      <div class="logo">⚡ WebVulnLab</div>
+    </div>
     <div class="score-pill">Resueltos: <span id="scoreVal">0</span> / 6</div>
   </header>
+  <div class="nav-backdrop" id="navBackdrop" onclick="closeNav()"></div>
   <main>
     <aside>
       <div class="aside-title">Retos</div>
@@ -338,6 +383,17 @@ function show(page) {
   $('nav-' + page).classList.add('active');
   if (page === 'sxss') loadMessages();
   if (page === 'csrf') loadCurrentEmail();
+  closeNav();
+}
+
+function toggleNav() {
+  document.querySelector('aside').classList.toggle('open');
+  $('navBackdrop').classList.toggle('show');
+}
+
+function closeNav() {
+  document.querySelector('aside').classList.remove('open');
+  $('navBackdrop').classList.remove('show');
 }
 
 function markSolved(id) {
