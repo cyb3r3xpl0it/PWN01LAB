@@ -1,0 +1,510 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>WebVulnLab</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Courier New', monospace; background: #060a12; color: #e2e8f0; min-height: 100vh; }
+
+/* ── Layout ── */
+.shell { display: flex; flex-direction: column; min-height: 100vh; }
+header { background: #0a0e1a; border-bottom: 1px solid #1e2a3a; padding: 12px 24px; display: flex; align-items: center; justify-content: space-between; }
+.logo { color: #5DCAA5; font-size: 16px; font-weight: bold; letter-spacing: 0.05em; }
+.score-pill { background: #111827; border: 1px solid #1e2a3a; border-radius: 20px; padding: 4px 14px; font-size: 12px; color: #94a3b8; }
+.score-pill span { color: #5DCAA5; font-weight: bold; }
+
+main { display: flex; flex: 1; }
+aside { width: 220px; min-width: 220px; background: #080c18; border-right: 1px solid #1e2a3a; padding: 16px 0; }
+.aside-title { color: #475569; font-size: 10px; text-transform: uppercase; letter-spacing: 0.1em; padding: 0 16px 8px; }
+.nav-item { padding: 9px 16px; cursor: pointer; font-size: 12px; color: #64748b; border-left: 3px solid transparent; transition: all 0.15s; display: flex; justify-content: space-between; align-items: center; }
+.nav-item:hover { color: #e2e8f0; background: #0d1425; }
+.nav-item.active { color: #5DCAA5; border-left-color: #5DCAA5; background: #0d1f2f; }
+.nav-item .sev { font-size: 9px; padding: 2px 5px; border-radius: 3px; }
+.sev-crit { background: #2d0a1a; color: #F4C0D1; }
+.sev-high { background: #2d0e0e; color: #F09595; }
+.sev-med  { background: #2d1e00; color: #FAC775; }
+.solved-mark { color: #5DCAA5; font-size: 11px; }
+
+.content { flex: 1; padding: 24px; overflow-y: auto; }
+.challenge-box { background: #0a0e1a; border: 1px solid #1e2a3a; border-radius: 8px; padding: 20px; max-width: 860px; }
+.ch-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 6px; }
+.ch-title { font-size: 16px; color: #e2e8f0; }
+.ch-desc { color: #64748b; font-size: 12px; margin-bottom: 20px; line-height: 1.6; }
+
+/* ── Form elements ── */
+.form-group { margin-bottom: 14px; }
+label { display: block; color: #94a3b8; font-size: 11px; margin-bottom: 5px; }
+input, textarea, select { width: 100%; background: #060a12; border: 1px solid #1e2a3a; border-radius: 4px; color: #e2e8f0; padding: 8px 10px; font-family: inherit; font-size: 13px; outline: none; }
+input:focus, textarea:focus { border-color: #5DCAA5; }
+textarea { resize: vertical; min-height: 70px; }
+.row { display: flex; gap: 10px; }
+.row input { flex: 1; }
+
+/* ── Buttons ── */
+.btn { background: transparent; border: 1px solid #5DCAA5; color: #5DCAA5; padding: 7px 18px; border-radius: 4px; cursor: pointer; font-family: inherit; font-size: 12px; transition: all 0.15s; }
+.btn:hover { background: #5DCAA522; }
+.btn-red { border-color: #E24B4A; color: #E24B4A; }
+.btn-red:hover { background: #E24B4A22; }
+.btn-amber { border-color: #EF9F27; color: #EF9F27; }
+.btn-amber:hover { background: #EF9F2722; }
+
+/* ── Output ── */
+.output { background: #030508; border: 1px solid #1e2a3a; border-radius: 4px; padding: 12px; margin-top: 12px; min-height: 60px; font-size: 12px; white-space: pre-wrap; word-break: break-all; line-height: 1.6; color: #94a3b8; }
+.output.ok { border-color: #1D9E7555; color: #5DCAA5; }
+.output.err { border-color: #E24B4A55; color: #F09595; }
+
+/* ── Tabs ── */
+.tabs { display: flex; gap: 4px; margin-bottom: 16px; border-bottom: 1px solid #1e2a3a; padding-bottom: 10px; }
+.tab { background: transparent; border: 1px solid transparent; color: #475569; padding: 5px 12px; border-radius: 4px; cursor: pointer; font-family: inherit; font-size: 11px; transition: all 0.1s; }
+.tab.active { border-color: #5DCAA5; color: #5DCAA5; background: #5DCAA510; }
+.tab:hover:not(.active) { color: #94a3b8; }
+
+/* ── Flag ── */
+.flag { display: none; background: #041a0c; border: 1px solid #1D9E75; border-radius: 4px; padding: 10px 14px; margin-top: 12px; font-size: 12px; color: #5DCAA5; }
+.flag.show { display: block; }
+
+/* ── Hint ── */
+.hint-btn { background: none; border: none; color: #EF9F27; font-family: inherit; font-size: 11px; cursor: pointer; margin-top: 10px; padding: 0; }
+.hint-btn:hover { text-decoration: underline; }
+.hint-box { display: none; background: #1a1200; border: 1px solid #EF9F2730; border-radius: 4px; padding: 10px 12px; margin-top: 8px; font-size: 11px; color: #FAC775; line-height: 1.7; }
+.hint-box.show { display: block; }
+.hint-box code { color: #5DCAA5; background: #0a0e1a; padding: 1px 5px; border-radius: 3px; }
+
+/* ── Code block ── */
+.code-block { background: #030508; border: 1px solid #1e2a3a; border-radius: 4px; padding: 12px; font-size: 11px; margin-top: 12px; line-height: 1.7; }
+.vuln { color: #F09595; }
+.fix  { color: #5DCAA5; }
+.dim  { color: #475569; }
+
+/* ── IDOR grid ── */
+.split { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+@media (max-width: 680px) { .split { grid-template-columns: 1fr; } aside { display: none; } }
+
+/* ── Message board ── */
+.msg-card { background: #0d1425; border: 1px solid #1e2a3a; border-radius: 4px; padding: 10px 12px; margin-bottom: 8px; }
+.msg-meta { font-size: 10px; color: #475569; margin-bottom: 4px; }
+.msg-body { font-size: 12px; }
+
+/* ── Welcome ── */
+.welcome { max-width: 600px; }
+.welcome h1 { color: #5DCAA5; font-size: 22px; margin-bottom: 10px; }
+.welcome p { color: #64748b; font-size: 13px; line-height: 1.8; margin-bottom: 10px; }
+.warn-box { background: #1a0d00; border: 1px solid #EF9F2740; border-radius: 6px; padding: 12px 16px; font-size: 12px; color: #FAC775; margin-top: 16px; }
+</style>
+</head>
+<body>
+<div class="shell">
+  <header>
+    <div class="logo">⚡ WebVulnLab</div>
+    <div class="score-pill">Resueltos: <span id="scoreVal">0</span> / 6</div>
+  </header>
+  <main>
+    <aside>
+      <div class="aside-title">Retos</div>
+      <div class="nav-item active" onclick="show('home')" id="nav-home">🏠 Inicio</div>
+      <div class="nav-item" onclick="show('sqli')" id="nav-sqli">SQL Injection <span class="sev sev-high">HIGH</span></div>
+      <div class="nav-item" onclick="show('xss')" id="nav-xss">XSS Reflejado <span class="sev sev-crit">CRIT</span></div>
+      <div class="nav-item" onclick="show('idor')" id="nav-idor">IDOR <span class="sev sev-med">MED</span></div>
+      <div class="nav-item" onclick="show('sxss')" id="nav-sxss">XSS Almacenado <span class="sev sev-crit">CRIT</span></div>
+      <div class="nav-item" onclick="show('cmdi')" id="nav-cmdi">Command Injection <span class="sev sev-high">HIGH</span></div>
+      <div class="nav-item" onclick="show('csrf')" id="nav-csrf">CSRF <span class="sev sev-med">MED</span></div>
+    </aside>
+
+    <div class="content">
+
+      <!-- HOME -->
+      <div id="page-home" class="welcome">
+        <h1>Bienvenido al lab</h1>
+        <p>Entorno de pentesting web deliberadamente vulnerable para practicar las vulnerabilidades más comunes del OWASP Top 10.</p>
+        <p>Cada reto está conectado a una base de datos MySQL real. Los exploits funcionan de verdad.</p>
+        <div class="warn-box">
+          ⚠ Este entorno es intencionalmente inseguro.<br>
+          Úsalo solo en tu máquina local o red privada.<br>
+          Nunca lo expongas a internet.
+        </div>
+      </div>
+
+      <!-- SQL INJECTION -->
+      <div id="page-sqli" class="challenge-box" style="display:none">
+        <div class="ch-header">
+          <div class="ch-title">🗄️ SQL Injection — Login Bypass</div>
+          <span class="sev sev-high" style="font-size:11px;padding:3px 8px;border-radius:4px">HIGH</span>
+        </div>
+        <div class="ch-desc">La query se construye concatenando directamente el input del usuario sin sanitización ni prepared statements. La BD es MySQL real.</div>
+        <div class="tabs">
+          <button class="tab active" onclick="sqliTab('lab',this)">🔬 Lab</button>
+          <button class="tab" onclick="sqliTab('query',this)">📋 Query</button>
+          <button class="tab" onclick="sqliTab('theory',this)">📖 Teoría</button>
+        </div>
+
+        <div id="sqli-lab">
+          <div class="form-group"><label>Usuario</label><input id="sqli-u" placeholder="admin" /></div>
+          <div class="form-group"><label>Contraseña</label><input id="sqli-p" type="password" placeholder="••••••" /></div>
+          <button class="btn" onclick="doSQLi()">Iniciar sesión</button>
+          <div class="output" id="sqli-out">— Resultado —</div>
+          <div class="flag" id="flag-sqli">🚩 FLAG{sqli_bypass_master} — Login bypassed con éxito</div>
+          <button class="hint-btn" onclick="toggleHint('sqli')">💡 Mostrar pista</button>
+          <div class="hint-box" id="hint-sqli">
+            Prueba en el campo usuario:<br>
+            <code>admin' --</code> &nbsp;o&nbsp; <code>admin' OR '1'='1</code><br>
+            La contraseña puede ser cualquier cosa.
+          </div>
+        </div>
+
+        <div id="sqli-query" style="display:none">
+          <div class="code-block">
+<span class="dim">-- Query ejecutada (MySQL real):</span>
+SELECT * FROM users
+WHERE username = '<span class="vuln">[USER_INPUT]</span>'
+  AND password = '<span class="vuln">[PASS_INPUT]</span>';
+
+<span class="dim">-- Con payload admin' --</span>
+SELECT * FROM users
+WHERE username = '<span class="fix">admin' --</span>' AND password = '...';
+<span class="dim">-- El -- comenta el resto → siempre true</span>
+          </div>
+        </div>
+
+        <div id="sqli-theory" style="display:none">
+          <div class="code-block">
+<span class="vuln">// VULNERABLE (Node.js)</span>
+const q = `SELECT * FROM users WHERE username = '${username}' AND password = '${password}'`;
+db.query(q, callback);
+
+<span class="fix">// FIX: Prepared statements</span>
+db.query('SELECT * FROM users WHERE username = ? AND password = ?',
+         [username, password], callback);
+          </div>
+        </div>
+      </div>
+
+      <!-- XSS REFLEJADO -->
+      <div id="page-xss" class="challenge-box" style="display:none">
+        <div class="ch-header">
+          <div class="ch-title">💉 XSS Reflejado — Buscador</div>
+          <span class="sev sev-crit" style="font-size:11px;padding:3px 8px;border-radius:4px">CRIT</span>
+        </div>
+        <div class="ch-desc">El término de búsqueda se refleja en la respuesta sin escapado. El servidor devuelve el valor tal cual desde <code style="color:#5DCAA5">/api/search?q=</code></div>
+        <div class="form-group"><label>Término de búsqueda</label><input id="xss-q" placeholder="Busca algo..." /></div>
+        <button class="btn" onclick="doXSS()">Buscar</button>
+        <div class="output" id="xss-out">— Resultado —</div>
+        <div id="xss-preview" style="display:none;margin-top:10px;background:#0d1425;border:1px solid #1e2a3a;border-radius:4px;padding:10px;font-size:12px;color:#94a3b8"></div>
+        <div class="flag" id="flag-xss">🚩 FLAG{xss_reflected_pwned} — XSS ejecutado en el DOM</div>
+        <button class="hint-btn" onclick="toggleHint('xss')">💡 Mostrar pista</button>
+        <div class="hint-box" id="hint-xss">
+          Prueba: <code>&lt;script&gt;alert(1)&lt;/script&gt;</code><br>
+          o: <code>&lt;img src=x onerror=alert(document.cookie)&gt;</code>
+        </div>
+        <div class="code-block" style="margin-top:14px">
+<span class="vuln">// VULNERABLE: refleja sin escapar</span>
+app.get('/api/search', (req, res) => {
+  res.json({ query: req.query.q });  <span class="dim">// sin sanitizar</span>
+});
+
+<span class="fix">// FIX:</span>
+const escapeHtml = s => s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+        </div>
+      </div>
+
+      <!-- IDOR -->
+      <div id="page-idor" class="challenge-box" style="display:none">
+        <div class="ch-header">
+          <div class="ch-title">🔑 IDOR — Acceso a perfiles</div>
+          <span class="sev sev-med" style="font-size:11px;padding:3px 8px;border-radius:4px">MED</span>
+        </div>
+        <div class="ch-desc">Estás autenticado como usuario #5. La API <code style="color:#5DCAA5">GET /api/user?id=</code> no verifica ownership. Accede al perfil del admin (ID 1).</div>
+        <div class="form-group">
+          <label>GET /api/user?id=</label>
+          <div class="row">
+            <input id="idor-id" type="number" value="5" min="1" />
+            <button class="btn" onclick="doIDOR()">Enviar</button>
+          </div>
+        </div>
+        <div class="output" id="idor-out">— Respuesta JSON —</div>
+        <div class="flag" id="flag-idor">🚩 FLAG{idor_admin_exposed} — Datos del admin filtrados</div>
+        <button class="hint-btn" onclick="toggleHint('idor')">💡 Mostrar pista</button>
+        <div class="hint-box" id="hint-idor">Cambia el ID a <code>1</code>. El campo <code>secret</code> del admin contiene la flag.</div>
+        <div class="code-block" style="margin-top:14px">
+<span class="vuln">// VULNERABLE: sin verificar ownership</span>
+app.get('/api/user', (req, res) => {
+  const id = req.query.id;
+  db.query('SELECT * FROM users WHERE id = ?', [id], callback);
+});
+
+<span class="fix">// FIX: verificar que id == sesión del usuario</span>
+if (id != req.session.userId && !req.session.isAdmin) return res.status(403).json({ error: 'Forbidden' });
+        </div>
+      </div>
+
+      <!-- XSS ALMACENADO -->
+      <div id="page-sxss" class="challenge-box" style="display:none">
+        <div class="ch-header">
+          <div class="ch-title">💾 XSS Almacenado — Foro</div>
+          <span class="sev sev-crit" style="font-size:11px;padding:3px 8px;border-radius:4px">CRIT</span>
+        </div>
+        <div class="ch-desc">Los mensajes se guardan en MySQL y se sirven sin escapar. Cualquier usuario que cargue el foro ejecutará tu payload.</div>
+        <div class="form-group"><label>Nombre</label><input id="sxss-name" value="anon" /></div>
+        <div class="form-group"><label>Mensaje</label><textarea id="sxss-msg" placeholder="Escribe un mensaje..."></textarea></div>
+        <button class="btn" onclick="doStoredXSS()">Publicar</button>
+        <button class="btn btn-amber" onclick="loadMessages()" style="margin-left:8px">↻ Actualizar</button>
+        <div class="flag" id="flag-sxss">🚩 FLAG{stored_xss_persisted} — Payload almacenado en BD</div>
+        <button class="hint-btn" onclick="toggleHint('sxss')">💡 Mostrar pista</button>
+        <div class="hint-box" id="hint-sxss">
+          Publica: <code>&lt;img src=x onerror="alert('XSS')"&gt;</code><br>
+          Luego haz clic en "Actualizar" para ver el payload persistido en la BD.
+        </div>
+        <div id="msg-board" style="margin-top:16px"></div>
+      </div>
+
+      <!-- COMMAND INJECTION -->
+      <div id="page-cmdi" class="challenge-box" style="display:none">
+        <div class="ch-header">
+          <div class="ch-title">💻 Command Injection — Ping tool</div>
+          <span class="sev sev-high" style="font-size:11px;padding:3px 8px;border-radius:4px">HIGH</span>
+        </div>
+        <div class="ch-desc">El backend ejecuta <code style="color:#5DCAA5">ping -c 2 [input]</code> sin validación. El output real del sistema se devuelve al cliente.</div>
+        <div class="form-group"><label>Host</label><input id="cmdi-h" placeholder="8.8.8.8" /></div>
+        <button class="btn" onclick="doCMDi()">Ejecutar</button>
+        <div class="output" id="cmdi-out">— Output del sistema —</div>
+        <div class="flag" id="flag-cmdi">🚩 FLAG{cmdi_rce_achieved} — RCE conseguido</div>
+        <button class="hint-btn" onclick="toggleHint('cmdi')">💡 Mostrar pista</button>
+        <div class="hint-box" id="hint-cmdi">
+          Usa separadores: <code>8.8.8.8; id</code><br>
+          o: <code>8.8.8.8 | cat /etc/passwd</code><br>
+          o: <code>8.8.8.8 && whoami</code>
+        </div>
+        <div class="code-block" style="margin-top:14px">
+<span class="vuln">// VULNERABLE</span>
+exec(`ping -c 2 ${host}`, callback);
+
+<span class="fix">// FIX: validar IP estrictamente</span>
+if (!/^(\d{1,3}\.){3}\d{1,3}$/.test(host)) return res.status(400).json({ error: 'IP inválida' });
+execFile('ping', ['-c', '2', host], callback);  <span class="dim">// sin shell</span>
+        </div>
+      </div>
+
+      <!-- CSRF -->
+      <div id="page-csrf" class="challenge-box" style="display:none">
+        <div class="ch-header">
+          <div class="ch-title">🎭 CSRF — Cambio de email</div>
+          <span class="sev sev-med" style="font-size:11px;padding:3px 8px;border-radius:4px">MED</span>
+        </div>
+        <div class="ch-desc">El endpoint <code style="color:#5DCAA5">POST /api/change-email</code> no valida ningún token CSRF. Simula que la víctima (user_id=5) visita una página maliciosa.</div>
+        <div class="split">
+          <div>
+            <div style="font-size:11px;color:#475569;margin-bottom:8px">Email actual de la víctima</div>
+            <div class="output" id="csrf-current" style="min-height:40px">Cargando...</div>
+          </div>
+          <div>
+            <div style="font-size:11px;color:#475569;margin-bottom:8px">Página maliciosa del atacante</div>
+            <div class="form-group"><label>Nuevo email (payload)</label><input id="csrf-evil" value="attacker@evil.com" /></div>
+          </div>
+        </div>
+        <button class="btn btn-red" onclick="doCSRF()">Simular visita de víctima a evil.com</button>
+        <div class="output" id="csrf-out" style="margin-top:12px">— Resultado —</div>
+        <div class="flag" id="flag-csrf">🚩 FLAG{csrf_no_token_pwned} — Email cambiado sin consentimiento</div>
+        <button class="hint-btn" onclick="toggleHint('csrf')">💡 Mostrar pista</button>
+        <div class="hint-box" id="hint-csrf">
+          Solo haz clic en el botón. En un ataque real, la víctima ni siquiera lo nota: la request se dispara al cargar la página maliciosa.<br><br>
+          <code>Fix:</code> Incluir un CSRF token único por sesión y validarlo en el servidor.
+        </div>
+        <div class="code-block" style="margin-top:14px">
+<span class="vuln">// VULNERABLE: sin token</span>
+app.post('/api/change-email', (req, res) => {
+  db.query('UPDATE emails SET email = ? WHERE user_id = ?', [email, user_id], cb);
+});
+
+<span class="fix">// FIX: generar y validar CSRF token</span>
+if (req.body.csrf_token !== req.session.csrf_token) return res.status(403).send('Forbidden');
+        </div>
+      </div>
+
+    </div><!-- /content -->
+  </main>
+</div>
+
+<script>
+const API = '';  // mismo origen — nginx hace proxy
+const solved = {};
+
+function $(id) { return document.getElementById(id); }
+
+function show(page) {
+  document.querySelectorAll('[id^="page-"]').forEach(el => el.style.display = 'none');
+  document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+  $('page-' + page).style.display = 'block';
+  $('nav-' + page).classList.add('active');
+  if (page === 'sxss') loadMessages();
+  if (page === 'csrf') loadCurrentEmail();
+}
+
+function markSolved(id) {
+  if (!solved[id]) {
+    solved[id] = true;
+    const count = Object.keys(solved).length;
+    $('scoreVal').textContent = count;
+    const nav = $('nav-' + id);
+    if (nav && !nav.querySelector('.solved-mark')) {
+      const s = document.createElement('span');
+      s.className = 'solved-mark'; s.textContent = ' ✓';
+      nav.appendChild(s);
+    }
+  }
+}
+
+function toggleHint(id) {
+  const h = $('hint-' + id);
+  h.classList.toggle('show');
+}
+
+function setOut(id, text, cls) {
+  const el = $(id);
+  el.textContent = text;
+  el.className = 'output' + (cls ? ' ' + cls : '');
+}
+
+// ── SQLi ──────────────────────────────────────
+function sqliTab(t, btn) {
+  ['lab','query','theory'].forEach(x => $('sqli-'+x).style.display = 'none');
+  document.querySelectorAll('#page-sqli .tab').forEach(b => b.classList.remove('active'));
+  $('sqli-'+t).style.display = 'block';
+  btn.classList.add('active');
+}
+
+async function doSQLi() {
+  const username = $('sqli-u').value;
+  const password = $('sqli-p').value;
+  setOut('sqli-out', 'Enviando...', '');
+  try {
+    const r = await fetch(API + '/api/login', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ username, password })
+    });
+    const d = await r.json();
+    const text = `Query: ${d.query}\n\n${d.success ? '✓ LOGIN OK — ' + d.message : '✗ ' + (d.message || d.error)}`;
+    setOut('sqli-out', text, d.success ? 'ok' : 'err');
+    if (d.success) { $('flag-sqli').classList.add('show'); markSolved('sqli'); }
+  } catch(e) { setOut('sqli-out', 'Error: ' + e.message, 'err'); }
+}
+
+// ── XSS Reflejado ─────────────────────────────
+async function doXSS() {
+  const q = $('xss-q').value;
+  setOut('xss-out', 'Buscando...', '');
+  try {
+    const r = await fetch(API + '/api/search?q=' + encodeURIComponent(q));
+    const d = await r.json();
+    const hasPayload = /<script|onerror|onload|javascript:|alert/i.test(q);
+    setOut('xss-out', `Servidor respondió:\n${JSON.stringify(d, null, 2)}\n\n${hasPayload ? '⚠ Payload XSS detectado — el browser ejecutaría el script al renderizarlo sin escapar.' : ''}`, hasPayload ? 'ok' : '');
+    if (hasPayload) {
+      // Renderiza el payload en un div aislado para demostrar el XSS
+      const preview = $('xss-preview');
+      preview.style.display = 'block';
+      preview.innerHTML = 'Renderizado sin escape: ' + d.query;
+      $('flag-xss').classList.add('show');
+      markSolved('xss');
+    }
+  } catch(e) { setOut('xss-out', 'Error: ' + e.message, 'err'); }
+}
+
+// ── IDOR ──────────────────────────────────────
+async function doIDOR() {
+  const id = $('idor-id').value;
+  setOut('idor-out', 'Consultando...', '');
+  try {
+    const r = await fetch(API + '/api/user?id=' + id);
+    const d = await r.json();
+    setOut('idor-out', JSON.stringify(d, null, 2), r.ok ? 'ok' : 'err');
+    if (d.role === 'admin' || d.secret) { $('flag-idor').classList.add('show'); markSolved('idor'); }
+  } catch(e) { setOut('idor-out', 'Error: ' + e.message, 'err'); }
+}
+
+// ── XSS Almacenado ────────────────────────────
+async function doStoredXSS() {
+  const username = $('sxss-name').value || 'anon';
+  const content  = $('sxss-msg').value;
+  if (!content.trim()) return;
+  try {
+    await fetch(API + '/api/messages', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ username, content })
+    });
+    $('sxss-msg').value = '';
+    await loadMessages();
+    if (/<script|onerror|onload|alert/i.test(content)) {
+      $('flag-sxss').classList.add('show');
+      markSolved('sxss');
+    }
+  } catch(e) { alert('Error: ' + e.message); }
+}
+
+async function loadMessages() {
+  const board = $('msg-board');
+  if (!board) return;
+  try {
+    const r = await fetch(API + '/api/messages');
+    const msgs = await r.json();
+    if (!msgs.length) { board.innerHTML = '<div style="color:#475569;font-size:12px">Sin mensajes aún.</div>'; return; }
+    board.innerHTML = msgs.map(m => `
+      <div class="msg-card">
+        <div class="msg-meta">${escTime(m.created_at)} — <strong style="color:#5DCAA5">${esc(m.username)}</strong></div>
+        <div class="msg-body">${m.content}</div>
+      </div>`).join('');
+  } catch(e) {}
+}
+
+// ── CMDi ──────────────────────────────────────
+async function doCMDi() {
+  const host = $('cmdi-h').value;
+  setOut('cmdi-out', 'Ejecutando...', '');
+  try {
+    const r = await fetch(API + '/api/ping', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ host })
+    });
+    const d = await r.json();
+    const hasInj = /[;|&`$()]/.test(host);
+    setOut('cmdi-out', d.output || d.error || '(sin output)', hasInj ? 'ok' : '');
+    if (hasInj && d.output) { $('flag-cmdi').classList.add('show'); markSolved('cmdi'); }
+  } catch(e) { setOut('cmdi-out', 'Error: ' + e.message, 'err'); }
+}
+
+// ── CSRF ──────────────────────────────────────
+async function loadCurrentEmail() {
+  try {
+    const r = await fetch(API + '/api/email?user_id=5');
+    const d = await r.json();
+    $('csrf-current').textContent = d.email || '(no encontrado)';
+  } catch(e) {}
+}
+
+async function doCSRF() {
+  const email = $('csrf-evil').value;
+  setOut('csrf-out', 'Enviando request forjada...', '');
+  try {
+    const r = await fetch(API + '/api/change-email', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ user_id: 5, email })
+    });
+    const d = await r.json();
+    setOut('csrf-out', `POST /api/change-email\n→ Sin CSRF token\n→ ${d.message || JSON.stringify(d)}`, d.success ? 'ok' : 'err');
+    if (d.success) {
+      $('csrf-current').textContent = email;
+      $('flag-csrf').classList.add('show');
+      markSolved('csrf');
+    }
+  } catch(e) { setOut('csrf-out', 'Error: ' + e.message, 'err'); }
+}
+
+// ── Helpers ───────────────────────────────────
+function esc(s) { return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function escTime(ts) { return ts ? new Date(ts).toLocaleTimeString() : ''; }
+</script>
+</body>
+</html>
