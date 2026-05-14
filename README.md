@@ -46,14 +46,24 @@ vulnlab/
 
 ## Retos incluidos
 
-| # | Vulnerabilidad    | Severidad | Endpoint             |
-|---|-------------------|-----------|----------------------|
-| 1 | SQL Injection      | HIGH      | POST /api/login      |
-| 2 | XSS Reflejado      | CRIT      | GET  /api/search     |
-| 3 | IDOR               | MED       | GET  /api/user       |
-| 4 | XSS Almacenado     | CRIT      | POST /api/messages   |
-| 5 | Command Injection  | HIGH      | POST /api/ping       |
-| 6 | CSRF               | MED       | POST /api/change-email |
+| # | Vulnerabilidad          | Severidad | Endpoint                    |
+|---|-------------------------|-----------|-----------------------------|
+| 1 | SQL Injection           | HIGH      | POST /api/login             |
+| 2 | XSS Reflejado           | CRIT      | GET  /api/search            |
+| 3 | IDOR                    | MED       | GET  /api/user              |
+| 4 | XSS Almacenado          | CRIT      | POST /api/messages          |
+| 5 | Command Injection       | HIGH      | POST /api/ping              |
+| 6 | CSRF                    | MED       | POST /api/change-email      |
+| 7 | Path Traversal (LFI)    | HIGH      | GET  /api/file              |
+| 8 | SSRF                    | HIGH      | POST /api/fetch             |
+| 9 | JWT débil / alg:none    | HIGH      | POST /api/token · GET /api/admin/flag |
+|10 | Broken Access Control   | HIGH      | GET  /api/admin/users       |
+|11 | Mass Assignment         | HIGH      | PUT  /api/profile           |
+|12 | Open Redirect           | MED       | GET  /api/redirect          |
+|13 | Prototype Pollution     | MED       | POST /api/merge             |
+|14 | XXE                     | MED       | POST /api/xml               |
+|15 | SSTI (EJS)              | CRIT      | POST /api/render            |
+|16 | Insecure Deserialization| CRIT      | POST /api/decode            |
 
 ## Apagar
 
