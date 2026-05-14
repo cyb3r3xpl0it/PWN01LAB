@@ -146,7 +146,7 @@ textarea { resize: vertical; min-height: 70px; }
       <button class="menu-btn" id="menuBtn" onclick="toggleNav()">☰</button>
       <div class="logo">⚡ WebVulnLab</div>
     </div>
-    <div class="score-pill">Resueltos: <span id="scoreVal">0</span> / 16</div>
+    <div class="score-pill">Resueltos: <span id="scoreVal">0</span> / 28</div>
   </header>
   <div class="nav-backdrop" id="navBackdrop" onclick="closeNav()"></div>
   <main>
@@ -168,7 +168,19 @@ textarea { resize: vertical; min-height: 70px; }
       <div class="nav-item" onclick="show('proto')" id="nav-proto">Prototype Pollution <span class="sev sev-med">MED</span></div>
       <div class="nav-item" onclick="show('xxe')"   id="nav-xxe">XXE <span class="sev sev-med">MED</span></div>
       <div class="nav-item" onclick="show('ssti')"  id="nav-ssti">SSTI <span class="sev sev-crit">CRIT</span></div>
-      <div class="nav-item" onclick="show('deser')" id="nav-deser">Insecure Deserial. <span class="sev sev-crit">CRIT</span></div>
+      <div class="nav-item" onclick="show('deser')"   id="nav-deser">Insecure Deserial. <span class="sev sev-crit">CRIT</span></div>
+      <div class="nav-item" onclick="show('upload')"  id="nav-upload">File Upload RCE <span class="sev sev-crit">CRIT</span></div>
+      <div class="nav-item" onclick="show('race')"    id="nav-race">Race Condition <span class="sev sev-high">HIGH</span></div>
+      <div class="nav-item" onclick="show('cors')"    id="nav-cors">CORS Miscfg <span class="sev sev-high">HIGH</span></div>
+      <div class="nav-item" onclick="show('reset')"   id="nav-reset">Password Reset <span class="sev sev-high">HIGH</span></div>
+      <div class="nav-item" onclick="show('redos')"   id="nav-redos">ReDoS <span class="sev sev-med">MED</span></div>
+      <div class="nav-item" onclick="show('biz')"     id="nav-biz">Business Logic <span class="sev sev-med">MED</span></div>
+      <div class="nav-item" onclick="show('crlf')"    id="nav-crlf">CRLF Injection <span class="sev sev-med">MED</span></div>
+      <div class="nav-item" onclick="show('click')"   id="nav-click">Clickjacking <span class="sev sev-med">MED</span></div>
+      <div class="nav-item" onclick="show('enum')"    id="nav-enum">Account Enum <span class="sev sev-med">MED</span></div>
+      <div class="nav-item" onclick="show('verb')"    id="nav-verb">Verb Tampering <span class="sev sev-med">MED</span></div>
+      <div class="nav-item" onclick="show('loginj')"  id="nav-loginj">Log Injection <span class="sev sev-med">MED</span></div>
+      <div class="nav-item" onclick="show('hosthdr')" id="nav-hosthdr">Host Hdr Inject <span class="sev sev-high">HIGH</span></div>
     </aside>
 
     <div class="content">
@@ -725,6 +737,397 @@ if (!obj.user || typeof obj.user !== 'string') throw new Error('Formato inválid
         </div>
       </div>
 
+      <!-- FILE UPLOAD RCE -->
+      <div id="page-upload" class="challenge-box" style="display:none">
+        <div class="ch-header">
+          <div class="ch-title">📤 File Upload RCE — Ejecución de archivos subidos</div>
+          <span class="sev sev-crit" style="font-size:11px;padding:3px 8px;border-radius:4px">CRIT</span>
+        </div>
+        <div class="ch-desc">El servidor acepta cualquier tipo de archivo sin validar extensión ni contenido. Sube un script <code style="color:#5DCAA5">.js</code> malicioso y ejecútalo remotamente via <code style="color:#5DCAA5">GET /api/exec</code>.</div>
+        <div class="step-label">Paso 1 — Crear y subir el payload</div>
+        <div class="form-group"><label>Contenido del archivo (se descargará como payload.js)</label>
+          <textarea id="upload-content" rows="3">module.exports = require('child_process').execSync('id').toString();</textarea>
+        </div>
+        <button class="btn btn-red" onclick="uploadFile()">Subir payload.js</button>
+        <div class="output" id="upload-out">— Resultado upload —</div>
+        <div class="step-label">Paso 2 — Ejecutar el archivo subido</div>
+        <div class="form-group"><label>GET /api/exec?file=</label>
+          <div class="row"><input id="upload-exec" value="payload.js" /><button class="btn" onclick="execFile2()">Ejecutar</button></div>
+        </div>
+        <div class="output" id="exec-out">— Output RCE —</div>
+        <div class="flag" id="flag-upload">🚩 FLAG{file_upload_rce} — Código arbitrario ejecutado via upload</div>
+        <button class="hint-btn" onclick="toggleHint('upload')">💡 Mostrar pista</button>
+        <div class="hint-box" id="hint-upload">
+          El servidor hace <code>require('/app/uploads/tu_archivo.js')</code> sin validar la extensión.<br>
+          Un <code>module.exports = execSync('cmd').toString()</code> se ejecuta en el proceso Node.js del servidor.
+        </div>
+        <div class="code-block" style="margin-top:14px">
+<span class="vuln">// VULNERABLE: multer sin restricción de tipo</span>
+const upload = multer({ storage: multer.diskStorage({ destination: '/app/uploads', filename: (req, file, cb) => cb(null, file.originalname) }) });
+app.get('/api/exec', (req, res) => {
+  const result = require('/app/uploads/' + req.query.file);  <span class="dim">// RCE</span>
+  res.json({ result: String(result) });
+});
+
+<span class="fix">// FIX: whitelist de extensiones + renombrar archivo</span>
+const ALLOWED_EXT = ['.jpg', '.png', '.pdf', '.txt'];
+if (!ALLOWED_EXT.includes(path.extname(file.originalname))) cb(new Error('Extensión no permitida'));
+        </div>
+      </div>
+
+      <!-- RACE CONDITION -->
+      <div id="page-race" class="challenge-box" style="display:none">
+        <div class="ch-header">
+          <div class="ch-title">⚡ Race Condition — Cupón de un solo uso</div>
+          <span class="sev sev-high" style="font-size:11px;padding:3px 8px;border-radius:4px">HIGH</span>
+        </div>
+        <div class="ch-desc">El cupón <code style="color:#5DCAA5">RACE100</code> solo debería usarse una vez. El servidor hace CHECK luego UPDATE sin transacción atómica — una ventana de 50ms permite usar el mismo cupón dos veces simultáneamente.</div>
+        <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
+          <button class="btn btn-amber" onclick="doRaceReset()">↺ Reiniciar cupón</button>
+          <button class="btn btn-red" onclick="doRace()">⚡ Enviar 2 requests simultáneas</button>
+        </div>
+        <div class="output" id="race-out">— Respuestas de ambas requests —</div>
+        <div class="flag" id="flag-race">🚩 FLAG{race_condition_double_spend} — Cupón usado dos veces</div>
+        <button class="hint-btn" onclick="toggleHint('race')">💡 Mostrar pista</button>
+        <div class="hint-box" id="hint-race">
+          El servidor: 1) SELECT donde used=0, 2) espera 50ms, 3) UPDATE a used=1.<br>
+          Entre el paso 1 y el 3 hay una ventana de tiempo — dos requests pueden pasar el SELECT antes de que alguna haga el UPDATE.<br>
+          <code>Fix:</code> Usar transacciones DB o <code>UPDATE ... WHERE used=0</code> como operación atómica.
+        </div>
+        <div class="code-block" style="margin-top:14px">
+<span class="vuln">// VULNERABLE: check-then-act no atómico</span>
+db.query('SELECT * FROM coupons WHERE code = ? AND used = 0', [code], (err, rows) => {
+  setTimeout(() => {  <span class="dim">// ventana de 50ms</span>
+    db.query('UPDATE coupons SET used = 1 WHERE id = ?', [rows[0].id], cb);
+  }, 50);
+});
+
+<span class="fix">// FIX: UPDATE atómico — solo hace efecto si used=0</span>
+db.query('UPDATE coupons SET used=1, used_by=? WHERE code=? AND used=0', [user_id, code], (err, result) => {
+  if (result.affectedRows === 0) return res.status(400).json({ error: 'Ya usado' });
+});
+        </div>
+      </div>
+
+      <!-- CORS -->
+      <div id="page-cors" class="challenge-box" style="display:none">
+        <div class="ch-header">
+          <div class="ch-title">🌍 CORS Misconfiguration — Robo de credenciales cross-origin</div>
+          <span class="sev sev-high" style="font-size:11px;padding:3px 8px;border-radius:4px">HIGH</span>
+        </div>
+        <div class="ch-desc">El endpoint <code style="color:#5DCAA5">GET /api/cors/secret</code> refleja cualquier origen en <code style="color:#5DCAA5">Access-Control-Allow-Origin</code> y activa <code style="color:#5DCAA5">Allow-Credentials: true</code>. Cualquier dominio puede robar los datos.</div>
+        <div class="form-group"><label>Origen simulado del atacante</label><input id="cors-origin" value="https://evil.com" /></div>
+        <button class="btn" onclick="doCORS()">Simular fetch desde evil.com</button>
+        <div class="output" id="cors-out">— Datos robados cross-origin —</div>
+        <div class="flag" id="flag-cors">🚩 FLAG{cors_credential_theft} — Token admin robado desde otro origen</div>
+        <button class="hint-btn" onclick="toggleHint('cors')">💡 Mostrar pista</button>
+        <div class="hint-box" id="hint-cors">
+          El servidor hace <code>res.setHeader('ACAO', req.headers.origin)</code> en vez de una whitelist fija.<br>
+          Con <code>Allow-Credentials: true</code>, el browser permite que otros orígenes lean la respuesta incluyendo cookies de sesión.<br>
+          <code>Fix:</code> Whitelist explícita de orígenes: <code>if (ALLOWED_ORIGINS.includes(origin)) ...</code>
+        </div>
+        <div class="code-block" style="margin-top:14px">
+<span class="vuln">// VULNERABLE: refleja cualquier origen</span>
+const origin = req.headers.origin || '*';
+res.setHeader('Access-Control-Allow-Origin', origin);
+res.setHeader('Access-Control-Allow-Credentials', 'true');
+
+<span class="fix">// FIX: whitelist estricta</span>
+const ALLOWED = ['https://app.miempresa.com'];
+if (ALLOWED.includes(req.headers.origin)) {
+  res.setHeader('Access-Control-Allow-Origin', req.headers.origin);
+}
+        </div>
+      </div>
+
+      <!-- PASSWORD RESET -->
+      <div id="page-reset" class="challenge-box" style="display:none">
+        <div class="ch-header">
+          <div class="ch-title">🔑 Password Reset inseguro — Token predecible</div>
+          <span class="sev sev-high" style="font-size:11px;padding:3px 8px;border-radius:4px">HIGH</span>
+        </div>
+        <div class="ch-desc">El token de reset es el timestamp Unix actual en hexadecimal — predecible por cualquier atacante. Además no tiene expiración. Solicita un reset, adivina el token y cambia la contraseña.</div>
+        <div class="step-label">Paso 1 — Solicitar reset (genera token predecible)</div>
+        <div class="form-group"><label>Email de la víctima</label><input id="reset-email" value="admin@corp.com" /></div>
+        <button class="btn" onclick="doResetRequest()">Solicitar reset</button>
+        <div class="output" id="reset-req-out">— Token generado —</div>
+        <div class="step-label">Paso 2 — Confirmar con el token (sin saber la contraseña original)</div>
+        <div class="split" style="margin-bottom:10px">
+          <div class="form-group" style="margin:0"><label>Token (del paso 1)</label><input id="reset-token" placeholder="hexadecimal..." /></div>
+          <div class="form-group" style="margin:0"><label>Nueva contraseña</label><input id="reset-newpwd" value="hacked123" /></div>
+        </div>
+        <button class="btn btn-red" onclick="doResetConfirm()">Cambiar contraseña</button>
+        <div class="output" id="reset-confirm-out">— Resultado —</div>
+        <div class="flag" id="flag-reset">🚩 FLAG{reset_token_predictable} — Contraseña del admin cambiada sin autenticación</div>
+        <button class="hint-btn" onclick="toggleHint('reset')">💡 Mostrar pista</button>
+        <div class="hint-box" id="hint-reset">
+          El token es <code>Math.floor(Date.now()/1000).toString(16)</code> — el timestamp actual en hex.<br>
+          El paso 1 te lo muestra directamente (en producción va por email, pero un atacante puede pedirlo justo antes que la víctima y adivinar el timestamp).<br>
+          <code>Fix:</code> Usar <code>crypto.randomBytes(32).toString('hex')</code> y expirar en 15 minutos.
+        </div>
+        <div class="code-block" style="margin-top:14px">
+<span class="vuln">// VULNERABLE: token = timestamp hex, sin expiración</span>
+const token = Math.floor(Date.now() / 1000).toString(16);
+<span class="dim">// No verifica created_at al confirmar</span>
+
+<span class="fix">// FIX: token aleatorio + expiración</span>
+const token = crypto.randomBytes(32).toString('hex');
+const expires = new Date(Date.now() + 15 * 60 * 1000);
+<span class="dim">// WHERE token = ? AND expires_at > NOW()</span>
+        </div>
+      </div>
+
+      <!-- ReDoS -->
+      <div id="page-redos" class="challenge-box" style="display:none">
+        <div class="ch-header">
+          <div class="ch-title">🐌 ReDoS — Regular Expression Denial of Service</div>
+          <span class="sev sev-med" style="font-size:11px;padding:3px 8px;border-radius:4px">MED</span>
+        </div>
+        <div class="ch-desc">El validador de email usa una regex con backtracking exponencial. Un input especialmente construido bloquea el event loop de Node.js durante segundos, dejando el servidor sin responder.</div>
+        <div class="form-group"><label>Email a validar</label><input id="redos-email" value="usuario@ejemplo.com" /></div>
+        <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
+          <button class="btn" onclick="doReDoS()">POST /api/validate-email</button>
+          <button class="btn btn-red" onclick="doReDoSPayload()">⚡ Cargar payload ReDoS</button>
+        </div>
+        <div class="output" id="redos-out">— Tiempo de respuesta —</div>
+        <div class="flag" id="flag-redos">🚩 FLAG{redos_event_loop_blocked} — Event loop de Node.js bloqueado</div>
+        <button class="hint-btn" onclick="toggleHint('redos')">💡 Mostrar pista</button>
+        <div class="hint-box" id="hint-redos">
+          El payload es: <code>aaaaaaaaaaaaaaaaaaaaaaaa@a.</code><br>
+          La regex intenta todas las combinaciones posibles de grupos — crece exponencialmente.<br>
+          En Node.js, esto bloquea el event loop completo porque JS es single-threaded.<br>
+          <code>Fix:</code> Usar una regex lineal o la librería <code>safe-regex</code> para validar tus patrones.
+        </div>
+        <div class="code-block" style="margin-top:14px">
+<span class="vuln">// VULNERABLE: backtracking exponencial</span>
+const pattern = /^([a-zA-Z0-9_\-\.]+)@((\[[0-9]{1,3}\.){3}|([\w\-]+\.)+)([a-zA-Z]{2,4})$/;
+pattern.test('aaaaaaaaaaaaaaaaaaaaa@a.');  <span class="dim">// O(2^n)</span>
+
+<span class="fix">// FIX: regex lineal o librería especializada</span>
+const pattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;  <span class="dim">// O(n)</span>
+        </div>
+      </div>
+
+      <!-- BUSINESS LOGIC -->
+      <div id="page-biz" class="challenge-box" style="display:none">
+        <div class="ch-header">
+          <div class="ch-title">🛒 Business Logic — Cantidad negativa</div>
+          <span class="sev sev-med" style="font-size:11px;padding:3px 8px;border-radius:4px">MED</span>
+        </div>
+        <div class="ch-desc">El endpoint de órdenes calcula <code style="color:#5DCAA5">total = precio × cantidad</code> sin validar que la cantidad sea positiva. Una cantidad negativa genera un total negativo — el sistema te "debe" dinero.</div>
+        <div class="split" style="margin-bottom:10px">
+          <div class="form-group" style="margin:0">
+            <label>Producto</label>
+            <select id="biz-product"></select>
+          </div>
+          <div class="form-group" style="margin:0"><label>Cantidad</label><input id="biz-qty" type="number" value="-10" /></div>
+        </div>
+        <button class="btn" onclick="doBiz()">POST /api/order</button>
+        <div class="output" id="biz-out">— Resultado —</div>
+        <div class="flag" id="flag-biz">🚩 FLAG{business_logic_negative_charge} — Total negativo generado</div>
+        <button class="hint-btn" onclick="toggleHint('biz')">💡 Mostrar pista</button>
+        <div class="hint-box" id="hint-biz">
+          Pon cantidad <code>-10</code> con el producto más caro ($199.99).<br>
+          Total = $199.99 × -10 = -$1,999.90 — el sistema registra que te debe dinero.<br>
+          <code>Fix:</code> <code>if (quantity &lt;= 0) return res.status(400).json({error:'Cantidad inválida'});</code>
+        </div>
+        <div class="code-block" style="margin-top:14px">
+<span class="vuln">// VULNERABLE: no valida que quantity &gt; 0</span>
+const total = product.price * quantity;  <span class="dim">// -10 × $199.99 = -$1999.90</span>
+db.query('INSERT INTO orders ... VALUES (?, ?, ?, ?, ?)', [..., total]);
+
+<span class="fix">// FIX: validar en servidor (nunca en cliente)</span>
+if (!Number.isInteger(quantity) || quantity &lt;= 0 || quantity &gt; 1000) return res.status(400).json({ error: 'Cantidad inválida' });
+        </div>
+      </div>
+
+      <!-- CRLF INJECTION -->
+      <div id="page-crlf" class="challenge-box" style="display:none">
+        <div class="ch-header">
+          <div class="ch-title">↩️ CRLF Injection — Inyección de headers HTTP</div>
+          <span class="sev sev-med" style="font-size:11px;padding:3px 8px;border-radius:4px">MED</span>
+        </div>
+        <div class="ch-desc">El endpoint <code style="color:#5DCAA5">GET /api/set-lang?lang=</code> escribe el valor directamente en el header <code style="color:#5DCAA5">Set-Cookie</code>. Inyectando <code style="color:#5DCAA5">\r\n</code> puedes añadir headers HTTP arbitrarios.</div>
+        <div class="form-group"><label>Valor del parámetro lang</label><input id="crlf-lang" value="es" /></div>
+        <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
+          <button class="btn" onclick="doCRLF()">GET /api/set-lang</button>
+          <button class="btn btn-red" onclick="crlfPayload()">Cargar payload CRLF</button>
+        </div>
+        <div class="output" id="crlf-out">— Headers de respuesta —</div>
+        <div class="flag" id="flag-crlf">🚩 FLAG{crlf_header_injection} — Header inyectado en la respuesta</div>
+        <button class="hint-btn" onclick="toggleHint('crlf')">💡 Mostrar pista</button>
+        <div class="hint-box" id="hint-crlf">
+          Los headers HTTP están separados por <code>\r\n</code>. Inyectar estos caracteres termina el header actual y añade uno nuevo.<br>
+          Payload: <code>es%0d%0aX-Injected%3a%20pwned%0d%0aSet-Cookie%3a%20admin%3d1</code><br>
+          Versiones recientes de Node.js bloquean \r\n en headers — verás el error en la respuesta, lo que también revela la vulnerabilidad.
+        </div>
+        <div class="code-block" style="margin-top:14px">
+<span class="vuln">// VULNERABLE: valor sin sanitizar en header</span>
+res.setHeader('Set-Cookie', `lang=${lang}; Path=/`);
+<span class="dim">// lang = "es\r\nX-Admin: true" → dos headers separados</span>
+
+<span class="fix">// FIX: sanitizar o usar API segura</span>
+const safeLang = lang.replace(/[\r\n]/g, '');
+res.cookie('lang', safeLang, { httpOnly: true });
+        </div>
+      </div>
+
+      <!-- CLICKJACKING -->
+      <div id="page-click" class="challenge-box" style="display:none">
+        <div class="ch-header">
+          <div class="ch-title">👆 Clickjacking — Sin X-Frame-Options</div>
+          <span class="sev sev-med" style="font-size:11px;padding:3px 8px;border-radius:4px">MED</span>
+        </div>
+        <div class="ch-desc">El servidor no envía el header <code style="color:#5DCAA5">X-Frame-Options</code> ni <code style="color:#5DCAA5">Content-Security-Policy: frame-ancestors</code>. La aplicación puede embeberse en un iframe de cualquier dominio externo.</div>
+        <button class="btn" onclick="doHeadersCheck()">Verificar headers de seguridad</button>
+        <div class="output" id="click-out">— Headers presentes/ausentes —</div>
+        <div class="step-label" style="margin-top:16px">Demo — La app embebida en un iframe</div>
+        <div style="background:#030508;border:1px solid #1e2a3a;border-radius:4px;padding:8px;margin-top:6px;font-size:11px;color:#475569;margin-bottom:8px">
+          Un atacante colocaría este iframe sobre un botón señuelo ("¡Gana un iPhone!") para que la víctima haga clic en acciones sin saberlo.
+        </div>
+        <iframe id="click-iframe" style="width:100%;height:260px;border:1px solid #E24B4A33;border-radius:4px;display:none" src="about:blank"></iframe>
+        <button class="btn btn-red" onclick="showIframe()" style="margin-top:8px">Cargar app en iframe</button>
+        <div class="flag" id="flag-click">🚩 FLAG{missing_security_headers} — App embebida en iframe externo</div>
+        <div class="code-block" style="margin-top:14px">
+<span class="vuln">// VULNERABLE: sin ninguna cabecera de seguridad</span>
+app.use(cors()); <span class="dim">// cualquier origen puede embeber la app</span>
+
+<span class="fix">// FIX: helmet.js añade todas las cabeceras de una vez</span>
+const helmet = require('helmet');
+app.use(helmet());
+<span class="dim">// Incluye: X-Frame-Options, CSP frame-ancestors, HSTS, etc.</span>
+        </div>
+      </div>
+
+      <!-- ACCOUNT ENUMERATION -->
+      <div id="page-enum" class="challenge-box" style="display:none">
+        <div class="ch-header">
+          <div class="ch-title">🔍 Account Enumeration — Mensajes de error reveladores</div>
+          <span class="sev sev-med" style="font-size:11px;padding:3px 8px;border-radius:4px">MED</span>
+        </div>
+        <div class="ch-desc">El endpoint de login devuelve mensajes distintos según si el usuario existe o no. Un atacante puede enumerar usuarios válidos probando usernames hasta obtener "Contraseña incorrecta" en vez de "Usuario no encontrado".</div>
+        <div class="split" style="margin-bottom:10px">
+          <div class="form-group" style="margin:0"><label>Usuario</label><input id="enum-user" value="admin" /></div>
+          <div class="form-group" style="margin:0"><label>Contraseña (cualquiera)</label><input id="enum-pass" value="wrongpass" /></div>
+        </div>
+        <button class="btn" onclick="doEnum()">POST /api/check-login</button>
+        <div class="output" id="enum-out">— Respuesta del servidor —</div>
+        <div class="flag" id="flag-enum">🚩 FLAG{account_enumeration} — Usuario válido identificado por el mensaje de error</div>
+        <button class="hint-btn" onclick="toggleHint('enum')">💡 Mostrar pista</button>
+        <div class="hint-box" id="hint-enum">
+          Prueba con <code>admin</code> (usuario existente) → "Contraseña incorrecta"<br>
+          Prueba con <code>noexiste</code> → "Usuario no encontrado"<br>
+          Esto permite saber qué usernames son válidos sin conocer la contraseña.<br>
+          <code>Fix:</code> Siempre responder "Credenciales incorrectas" sin distinguir si el error es el usuario o la contraseña.
+        </div>
+        <div class="code-block" style="margin-top:14px">
+<span class="vuln">// VULNERABLE: mensajes distintos</span>
+if (!user) return res.json({ message: 'Usuario no encontrado' });
+if (user.password !== password) return res.json({ message: 'Contraseña incorrecta' });
+
+<span class="fix">// FIX: mismo mensaje siempre</span>
+if (!user || user.password !== password) return res.json({ message: 'Credenciales incorrectas' });
+<span class="dim">// Opcionalmente: mismo tiempo de respuesta (timing attack)</span>
+        </div>
+      </div>
+
+      <!-- VERB TAMPERING -->
+      <div id="page-verb" class="challenge-box" style="display:none">
+        <div class="ch-header">
+          <div class="ch-title">🔀 Verb Tampering — GET evita la autenticación POST</div>
+          <span class="sev sev-med" style="font-size:11px;padding:3px 8px;border-radius:4px">MED</span>
+        </div>
+        <div class="ch-desc">El endpoint admin solo verifica la API key cuando el método es <code style="color:#5DCAA5">POST</code>. Enviando el mismo request como <code style="color:#5DCAA5">GET</code> se salta la verificación completamente.</div>
+        <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
+          <button class="btn btn-amber" onclick="doVerbPOST()">POST (con auth incorrecta) → 403</button>
+          <button class="btn btn-red" onclick="doVerbGET()">GET (sin auth) → accede</button>
+        </div>
+        <div class="output" id="verb-out">— Respuesta —</div>
+        <div class="flag" id="flag-verb">🚩 FLAG{verb_tampering_bypass} — Acción admin ejecutada via GET sin autenticación</div>
+        <button class="hint-btn" onclick="toggleHint('verb')">💡 Mostrar pista</button>
+        <div class="hint-box" id="hint-verb">
+          El handler usa <code>app.all()</code> — acepta cualquier método.<br>
+          Pero la verificación de API key solo se ejecuta cuando <code>req.method === 'POST'</code>.<br>
+          <code>Fix:</code> Aplicar middleware de autenticación sin distinción de método.
+        </div>
+        <div class="code-block" style="margin-top:14px">
+<span class="vuln">// VULNERABLE: app.all() + check solo en POST</span>
+app.all('/api/admin/secret-action', (req, res) => {
+  if (req.method === 'POST') {
+    if (req.headers['x-api-key'] !== 'admin-secret') return res.status(403);
+  }
+  res.json({ success: true });  <span class="dim">// GET llega aquí sin pasar el check</span>
+});
+
+<span class="fix">// FIX: autenticar siempre, sin importar el método</span>
+app.all('/api/admin/secret-action', requireAuth, (req, res) => { ... });
+        </div>
+      </div>
+
+      <!-- LOG INJECTION -->
+      <div id="page-loginj" class="challenge-box" style="display:none">
+        <div class="ch-header">
+          <div class="ch-title">📋 Log Injection — Falsificación de entradas de log</div>
+          <span class="sev sev-med" style="font-size:11px;padding:3px 8px;border-radius:4px">MED</span>
+        </div>
+        <div class="ch-desc">El servidor escribe el mensaje del usuario directamente en el log sin sanitizar. Inyectando <code style="color:#5DCAA5">\n</code> puedes añadir líneas falsas que parecen entradas legítimas de admin, borrando tu rastro o inculpando a otros.</div>
+        <div class="form-group"><label>Mensaje a loggear</label><textarea id="loginj-msg" rows="3">acceso normal</textarea></div>
+        <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
+          <button class="btn" onclick="doLogInj()">POST /api/log</button>
+          <button class="btn btn-red" onclick="logInjPayload()">Cargar payload inyección</button>
+        </div>
+        <div class="output" id="loginj-out">— Entrada registrada —</div>
+        <div class="flag" id="flag-loginj">🚩 FLAG{log_injection_fake_entry} — Líneas falsas inyectadas en los logs</div>
+        <button class="hint-btn" onclick="toggleHint('loginj')">💡 Mostrar pista</button>
+        <div class="hint-box" id="hint-loginj">
+          Inyecta: <code>normal\n[2020-01-01] [ADMIN] User admin changed password\n[2020-01-01] [SYSTEM] Backup completed</code><br>
+          En los logs del servidor aparecerán como entradas reales de admin.<br>
+          <code>Fix:</code> Escapar <code>\n</code>, <code>\r</code> y caracteres de control en todos los inputs que van a logs.
+        </div>
+        <div class="code-block" style="margin-top:14px">
+<span class="vuln">// VULNERABLE: input directo al log</span>
+console.log(`[${new Date().toISOString()}] [USER] ${message}`);
+<span class="dim">// message = "ok\n[ADMIN] Fake admin action" → dos líneas en el log</span>
+
+<span class="fix">// FIX: escapar caracteres de control</span>
+const safe = message.replace(/[\r\n\t]/g, ' ');
+console.log(`[${new Date().toISOString()}] [USER] ${safe}`);
+        </div>
+      </div>
+
+      <!-- HOST HEADER INJECTION -->
+      <div id="page-hosthdr" class="challenge-box" style="display:none">
+        <div class="ch-header">
+          <div class="ch-title">🏠 Host Header Injection — Password Reset Poisoning</div>
+          <span class="sev sev-high" style="font-size:11px;padding:3px 8px;border-radius:4px">HIGH</span>
+        </div>
+        <div class="ch-desc">El servidor construye el link de reset de contraseña usando el header <code style="color:#5DCAA5">X-Forwarded-Host</code> sin validarlo. Un atacante puede envenenar el link para que apunte a su propio servidor y robe el token.</div>
+        <div class="split" style="margin-bottom:10px">
+          <div class="form-group" style="margin:0"><label>Email de la víctima</label><input id="hosthdr-email" value="victim@corp.com" /></div>
+          <div class="form-group" style="margin:0"><label>X-Forwarded-Host (atacante)</label><input id="hosthdr-host" value="evil.com" /></div>
+        </div>
+        <button class="btn btn-red" onclick="doHostHdr()">POST /api/reset-poison</button>
+        <div class="output" id="hosthdr-out">— Link de reset generado —</div>
+        <div class="flag" id="flag-hosthdr">🚩 FLAG{host_header_injection} — Token de reset apunta al servidor del atacante</div>
+        <button class="hint-btn" onclick="toggleHint('hosthdr')">💡 Mostrar pista</button>
+        <div class="hint-box" id="hint-hosthdr">
+          El servidor confía en el header <code>X-Forwarded-Host</code> (usado por proxies/CDN).<br>
+          Si el atacante controla este header, el link de reset va a <code>http://evil.com/reset?token=...</code>.<br>
+          La víctima recibe el email, hace clic, y el token llega al servidor del atacante.<br>
+          <code>Fix:</code> Hardcodear el dominio base desde config del servidor, nunca desde headers del request.
+        </div>
+        <div class="code-block" style="margin-top:14px">
+<span class="vuln">// VULNERABLE: usa X-Forwarded-Host del cliente</span>
+const host = req.headers['x-forwarded-host'] || req.headers['host'];
+const link = `http://${host}/reset?token=${token}`;
+<span class="dim">// X-Forwarded-Host: evil.com → link va a evil.com</span>
+
+<span class="fix">// FIX: dominio hardcodeado en configuración</span>
+const BASE_URL = process.env.APP_URL || 'https://miapp.com';
+const link = `${BASE_URL}/reset?token=${token}`;
+        </div>
+      </div>
+
     </div><!-- /content -->
   </main>
 </div>
@@ -742,6 +1145,7 @@ function show(page) {
   $('nav-' + page).classList.add('active');
   if (page === 'sxss') loadMessages();
   if (page === 'csrf') loadCurrentEmail();
+  if (page === 'biz')  loadProducts();
   closeNav();
 }
 
@@ -1119,6 +1523,255 @@ async function doDeser() {
     setOut('deser-out', JSON.stringify(d, null, 2), d.flag ? 'ok' : (d.error ? 'err' : ''));
     if (d.flag) { $('flag-deser').classList.add('show'); markSolved('deser'); }
   } catch(e) { setOut('deser-out', 'Error: ' + e.message, 'err'); }
+}
+
+// ── File Upload RCE ───────────────────────────
+async function uploadFile() {
+  const content = $('upload-content').value;
+  const blob = new Blob([content], { type: 'text/javascript' });
+  const fd = new FormData();
+  fd.append('file', blob, 'payload.js');
+  setOut('upload-out', 'Subiendo...', '');
+  try {
+    const r = await fetch(API + '/api/upload', { method: 'POST', body: fd });
+    const d = await r.json();
+    setOut('upload-out', JSON.stringify(d, null, 2), d.success ? 'ok' : 'err');
+    if (d.filename) $('upload-exec').value = d.filename;
+  } catch(e) { setOut('upload-out', 'Error: ' + e.message, 'err'); }
+}
+
+async function execFile2() {
+  const file = $('upload-exec').value;
+  setOut('exec-out', 'Ejecutando...', '');
+  try {
+    const r = await fetch(API + '/api/exec?file=' + encodeURIComponent(file));
+    const d = await r.json();
+    setOut('exec-out', JSON.stringify(d, null, 2), d.flag ? 'ok' : (d.error ? 'err' : ''));
+    if (d.flag) { $('flag-upload').classList.add('show'); markSolved('upload'); }
+  } catch(e) { setOut('exec-out', 'Error: ' + e.message, 'err'); }
+}
+
+// ── Race Condition ────────────────────────────
+async function doRaceReset() {
+  await fetch(API + '/api/coupon/reset', { method: 'POST', headers: {'Content-Type':'application/json'}, body: '{}' });
+  setOut('race-out', 'Cupón RACE100 reiniciado. Listo para el ataque.', 'ok');
+}
+
+async function doRace() {
+  setOut('race-out', 'Enviando 2 requests simultáneas...', '');
+  const body = JSON.stringify({ code: 'RACE100', user_id: 2 });
+  const opts = { method: 'POST', headers: {'Content-Type':'application/json'}, body };
+  try {
+    const [r1, r2] = await Promise.all([
+      fetch(API + '/api/coupon/redeem', opts).then(r => r.json()),
+      fetch(API + '/api/coupon/redeem', opts).then(r => r.json()),
+    ]);
+    const bothOk = r1.success && r2.success;
+    setOut('race-out',
+      `Request 1: ${JSON.stringify(r1)}\n\nRequest 2: ${JSON.stringify(r2)}\n\n${bothOk ? '⚡ RACE CONDITION — ambas requests tuvieron éxito!' : 'Solo una tuvo éxito (reintenta o reinicia el cupón)'}`,
+      bothOk ? 'ok' : '');
+    if (bothOk || r1.flag || r2.flag) { $('flag-race').classList.add('show'); markSolved('race'); }
+  } catch(e) { setOut('race-out', 'Error: ' + e.message, 'err'); }
+}
+
+// ── CORS ──────────────────────────────────────
+async function doCORS() {
+  const origin = $('cors-origin').value;
+  setOut('cors-out', 'Simulando fetch desde ' + origin + '...', '');
+  try {
+    const r = await fetch(API + '/api/cors/secret', { headers: { 'Origin': origin } });
+    const acao = r.headers.get('access-control-allow-origin');
+    const cred = r.headers.get('access-control-allow-credentials');
+    const d = await r.json();
+    setOut('cors-out',
+      `Access-Control-Allow-Origin: ${acao}\nAccess-Control-Allow-Credentials: ${cred}\n\nDatos robados:\n${JSON.stringify(d, null, 2)}`,
+      d.flag ? 'ok' : '');
+    if (d.flag) { $('flag-cors').classList.add('show'); markSolved('cors'); }
+  } catch(e) { setOut('cors-out', 'Error: ' + e.message, 'err'); }
+}
+
+// ── Password Reset ────────────────────────────
+async function doResetRequest() {
+  const email = $('reset-email').value;
+  setOut('reset-req-out', 'Solicitando...', '');
+  try {
+    const r = await fetch(API + '/api/reset-request', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ email })
+    });
+    const d = await r.json();
+    setOut('reset-req-out', JSON.stringify(d, null, 2), d.sent ? 'ok' : '');
+    if (d.token) $('reset-token').value = d.token;
+  } catch(e) { setOut('reset-req-out', 'Error: ' + e.message, 'err'); }
+}
+
+async function doResetConfirm() {
+  const token = $('reset-token').value;
+  const email = $('reset-email').value;
+  const new_password = $('reset-newpwd').value;
+  setOut('reset-confirm-out', 'Confirmando...', '');
+  try {
+    const r = await fetch(API + '/api/reset-confirm', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ token, email, new_password })
+    });
+    const d = await r.json();
+    setOut('reset-confirm-out', JSON.stringify(d, null, 2), d.success ? 'ok' : 'err');
+    if (d.flag) { $('flag-reset').classList.add('show'); markSolved('reset'); }
+  } catch(e) { setOut('reset-confirm-out', 'Error: ' + e.message, 'err'); }
+}
+
+// ── ReDoS ─────────────────────────────────────
+function doReDoSPayload() { $('redos-email').value = 'aaaaaaaaaaaaaaaaaaaaaaaa@a.'; }
+
+async function doReDoS() {
+  const email = $('redos-email').value;
+  setOut('redos-out', 'Validando...', '');
+  const t0 = Date.now();
+  try {
+    const r = await fetch(API + '/api/validate-email', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ email })
+    });
+    const d = await r.json();
+    const clientTime = Date.now() - t0;
+    setOut('redos-out', `Válido: ${d.valid}\nTiempo servidor: ${d.elapsed_ms}ms\nTiempo cliente: ${clientTime}ms\n\n${d.flag ? d.note : 'Sin bloqueo del event loop'}`, d.flag ? 'ok' : '');
+    if (d.flag) { $('flag-redos').classList.add('show'); markSolved('redos'); }
+  } catch(e) { setOut('redos-out', 'Error: ' + e.message, 'err'); }
+}
+
+// ── Business Logic ────────────────────────────
+async function loadProducts() {
+  try {
+    const r = await fetch(API + '/api/products');
+    const products = await r.json();
+    const sel = $('biz-product');
+    if (sel) sel.innerHTML = products.map(p => `<option value="${p.id}">${p.name} ($${p.price})</option>`).join('');
+  } catch(_) {}
+}
+
+async function doBiz() {
+  const product_id = $('biz-product').value;
+  const quantity = parseInt($('biz-qty').value);
+  setOut('biz-out', 'Procesando orden...', '');
+  try {
+    const r = await fetch(API + '/api/order', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ product_id, quantity, user_id: 2 })
+    });
+    const d = await r.json();
+    setOut('biz-out', JSON.stringify(d, null, 2), d.flag ? 'ok' : (d.error ? 'err' : 'ok'));
+    if (d.flag) { $('flag-biz').classList.add('show'); markSolved('biz'); }
+  } catch(e) { setOut('biz-out', 'Error: ' + e.message, 'err'); }
+}
+
+// ── CRLF Injection ────────────────────────────
+function crlfPayload() { $('crlf-lang').value = 'es\r\nX-Injected: pwned\r\nSet-Cookie: admin=1; Path=/'; }
+
+async function doCRLF() {
+  const lang = $('crlf-lang').value;
+  setOut('crlf-out', 'Enviando...', '');
+  try {
+    const r = await fetch(API + '/api/set-lang?lang=' + encodeURIComponent(lang));
+    const d = await r.json();
+    const headers = {};
+    for (const [k, v] of r.headers.entries()) headers[k] = v;
+    const injected = lang.includes('\r\n') || lang.includes('\n');
+    setOut('crlf-out', `Lang enviado: ${JSON.stringify(lang)}\n\nRespuesta del servidor:\n${JSON.stringify(d, null, 2)}\n\nHeaders recibidos:\n${JSON.stringify(headers, null, 2)}\n\n${injected ? '⚠ Payload CRLF enviado — Node.js moderno bloquea \\r\\n en setHeader(), pero versiones antiguas son vulnerables.' : ''}`, injected ? 'ok' : '');
+    if (injected) { $('flag-crlf').classList.add('show'); markSolved('crlf'); }
+  } catch(e) { setOut('crlf-out', 'Error: ' + e.message + '\n\n(Node.js bloqueó la inyección CRLF — la vulnerabilidad existe en el código pero el runtime la mitiga en versiones recientes)', 'ok'); $('flag-crlf').classList.add('show'); markSolved('crlf'); }
+}
+
+// ── Clickjacking ──────────────────────────────
+async function doHeadersCheck() {
+  setOut('click-out', 'Verificando...', '');
+  try {
+    const r = await fetch(API + '/api/headers-check');
+    const d = await r.json();
+    setOut('click-out', JSON.stringify(d, null, 2), d.flag ? 'ok' : '');
+    if (d.flag) { $('flag-click').classList.add('show'); markSolved('click'); }
+  } catch(e) { setOut('click-out', 'Error: ' + e.message, 'err'); }
+}
+
+function showIframe() {
+  const f = $('click-iframe');
+  f.src = window.location.origin + '/';
+  f.style.display = 'block';
+  $('flag-click').classList.add('show');
+  markSolved('click');
+}
+
+// ── Account Enumeration ───────────────────────
+async function doEnum() {
+  const username = $('enum-user').value;
+  const password = $('enum-pass').value;
+  setOut('enum-out', 'Enviando...', '');
+  try {
+    const r = await fetch(API + '/api/check-login', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ username, password })
+    });
+    const d = await r.json();
+    setOut('enum-out', `Mensaje: "${d.message}"\n\n${d.message === 'Contraseña incorrecta' ? '→ El usuario "' + username + '" EXISTE en el sistema' : d.message === 'Usuario no encontrado' ? '→ El usuario "' + username + '" NO existe' : '→ Login exitoso'}`, d.flag ? 'ok' : 'ok');
+    if (d.flag) { $('flag-enum').classList.add('show'); markSolved('enum'); }
+  } catch(e) { setOut('enum-out', 'Error: ' + e.message, 'err'); }
+}
+
+// ── Verb Tampering ────────────────────────────
+async function doVerbPOST() {
+  setOut('verb-out', 'Enviando POST sin API key válida...', '');
+  try {
+    const r = await fetch(API + '/api/admin/secret-action', {
+      method: 'POST', headers: {'Content-Type':'application/json', 'X-Api-Key': 'wrong-key'},
+      body: '{}'
+    });
+    const d = await r.json();
+    setOut('verb-out', `POST → HTTP ${r.status}\n${JSON.stringify(d, null, 2)}\n\nAhora prueba con GET (botón rojo)...`, r.status === 403 ? 'err' : 'ok');
+  } catch(e) { setOut('verb-out', 'Error: ' + e.message, 'err'); }
+}
+
+async function doVerbGET() {
+  setOut('verb-out', 'Enviando GET sin ninguna autenticación...', '');
+  try {
+    const r = await fetch(API + '/api/admin/secret-action');
+    const d = await r.json();
+    setOut('verb-out', `GET → HTTP ${r.status}\n${JSON.stringify(d, null, 2)}`, d.flag ? 'ok' : 'err');
+    if (d.flag) { $('flag-verb').classList.add('show'); markSolved('verb'); }
+  } catch(e) { setOut('verb-out', 'Error: ' + e.message, 'err'); }
+}
+
+// ── Log Injection ─────────────────────────────
+function logInjPayload() { $('loginj-msg').value = 'acceso normal\n[2020-01-01T00:00:00Z] [ADMIN] User admin deleted all logs\n[2020-01-01T00:00:01Z] [SYSTEM] Backup completed successfully'; }
+
+async function doLogInj() {
+  const message = $('loginj-msg').value;
+  setOut('loginj-out', 'Enviando...', '');
+  try {
+    const r = await fetch(API + '/api/log', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ message })
+    });
+    const d = await r.json();
+    setOut('loginj-out', `Entrada en los logs del servidor:\n\n${d.entry}\n\n${d.flag ? d.note : ''}`, d.flag ? 'ok' : '');
+    if (d.flag) { $('flag-loginj').classList.add('show'); markSolved('loginj'); }
+  } catch(e) { setOut('loginj-out', 'Error: ' + e.message, 'err'); }
+}
+
+// ── Host Header Injection ─────────────────────
+async function doHostHdr() {
+  const email = $('hosthdr-email').value;
+  const host = $('hosthdr-host').value;
+  setOut('hosthdr-out', 'Enviando...', '');
+  try {
+    const r = await fetch(API + '/api/reset-poison', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Forwarded-Host': host },
+      body: JSON.stringify({ email })
+    });
+    const d = await r.json();
+    setOut('hosthdr-out', JSON.stringify(d, null, 2), d.flag ? 'ok' : '');
+    if (d.flag) { $('flag-hosthdr').classList.add('show'); markSolved('hosthdr'); }
+  } catch(e) { setOut('hosthdr-out', 'Error: ' + e.message, 'err'); }
 }
 
 // ── Helpers ───────────────────────────────────
